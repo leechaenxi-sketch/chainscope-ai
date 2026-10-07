@@ -111,10 +111,8 @@ export function Dashboard({
         </header>
 
         <section className="pb-12 pt-20 text-center md:pt-28">
-          <div className="text-xs uppercase tracking-[0.28em] text-cyan-400">{t.heroEyebrow}</div>
           <h1 className="mx-auto mt-5 max-w-4xl text-4xl font-semibold tracking-[-0.04em] md:text-6xl">
-            {t.heroTitle1}
-            <span className="block text-slate-400">{t.heroTitle2}</span>
+            {t.heroTitle}
           </h1>
           <p className="mx-auto mt-6 max-w-2xl text-sm leading-7 text-slate-400 md:text-base">
             {t.heroDescription}
@@ -136,7 +134,7 @@ export function Dashboard({
             </button>
           </div>
 
-          <div className="mt-4 text-xs text-slate-500">{status}</div>
+          {status ? <div className="mt-4 text-xs text-slate-500">{status}</div> : null}
         </section>
 
         {hasResults && riskScore !== null && (
