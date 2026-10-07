@@ -86,7 +86,7 @@ export function Dashboard({
               C
             </div>
             <div>
-              <div className="font-semibold">ChainScope</div>
+              <div className="font-semibold">ChainScope AI</div>
               <div className="text-xs text-slate-500">{t.subtitle}</div>
             </div>
           </div>
@@ -111,33 +111,12 @@ export function Dashboard({
         </header>
 
         <section className="pb-12 pt-20 text-center md:pt-28">
-          <div className="text-xs uppercase tracking-[0.3em] text-cyan-400">
-            {t.heroEyebrow}
-          </div>
-
-          <h1 className="mx-auto mt-5 max-w-5xl text-5xl font-semibold tracking-[-0.055em] md:text-7xl">
-            ChainScope
+          <div className="text-xs uppercase tracking-[0.28em] text-cyan-400">{t.heroEyebrow}</div>
+          <h1 className="mx-auto mt-5 max-w-4xl text-4xl font-semibold tracking-[-0.04em] md:text-6xl">
+            {t.heroTitle1}
+            <span className="block text-slate-400">{t.heroTitle2}</span>
           </h1>
-
-          <div className="mt-5 space-y-1">
-            <div className="text-lg font-medium text-slate-200 md:text-xl">
-              {t.heroChineseName}
-            </div>
-            <div className="text-sm tracking-[0.04em] text-slate-500 md:text-base">
-              {t.heroEnglishName}
-            </div>
-          </div>
-
-          <div className="mx-auto mt-6 flex max-w-3xl flex-wrap items-center justify-center gap-x-3 gap-y-2 text-sm text-cyan-300/90 md:text-base">
-            {t.heroTaglineItems.map((item: string, index: number) => (
-              <span key={item} className="flex items-center gap-3">
-                {index > 0 && <span className="text-slate-700">·</span>}
-                <span>{item}</span>
-              </span>
-            ))}
-          </div>
-
-          <p className="mx-auto mt-5 max-w-2xl text-sm leading-7 text-slate-500 md:text-base">
+          <p className="mx-auto mt-6 max-w-2xl text-sm leading-7 text-slate-400 md:text-base">
             {t.heroDescription}
           </p>
 
