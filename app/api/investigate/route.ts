@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { ProxyAgent, fetch as undiciFetch } from "undici";
 
+type Language = "zh" | "en";
+
 type Anomaly = {
   type: string;
   severity: "LOW" | "MEDIUM" | "HIGH";
@@ -44,37 +46,82 @@ type InternalTransactionSummary = {
   isError?: string;
 };
 
-// ===== 简单防滥用:in-memory 限流 + 结果缓存 =====
-// 说明:Vercel Serverless 是多实例部署,此限流为「尽力而为」级别,
-// 足以挡住普通刷量,但不是严格的全局限流;生产级可换 Upstash Redis。
+type CounterpartySummary = {
+  address: string;
+  interactionCount: number;
+  outgoingCount: number;
+  incomingCount: number;
+  ethOut: string;
+  ethIn: string;
+  tokenEventCount: number;
+  internalEventCount: number;
+  sources: string[];
+  tokenSymbols: string[];
+  lastInteraction: string;
+};
 
-const RATE_LIMIT_PER_WINDOW = 5; // 每个 IP 每窗口最多调用次数
-const RATE_LIMIT_WINDOW_MS = 60_000; // 窗口:60 秒
-const CACHE_TTL_MS = 10 * 60_000; // 相同地址报告缓存时长:10 分钟
+type SecondHopSummary = {
+  investigatedAddress: string;
+  selectedFromAddress: string;
+  selectionReason: string;
+
+  transactionCount: number;
+  tokenTransferCount: number;
+  internalTransactionCount: number;
+
+  totalObservedEvents: number;
+
+  topCounterparties: {
+    address: string;
+    interactionCount: number;
+    outgoingCount: number;
+    incomingCount: number;
+    ethOut: string;
+    ethIn: string;
+    sources: string[];
+    tokenSymbols: string[];
+  }[];
+
+  linksBackToRoot: boolean;
+  rootInteractionCount: number;
+};
+
+// ============================================================
+// 防滥用：限流 + 报告缓存
+// ============================================================
+
+const RATE_LIMIT_PER_WINDOW = 5;
+const RATE_LIMIT_WINDOW_MS = 60_000;
+const CACHE_TTL_MS = 10 * 60_000;
 
 const rateLimitMap = new Map<
   string,
-  { count: number; resetAt: number }
+  {
+    count: number;
+    resetAt: number;
+  }
 >();
 
 const reportCache = new Map<
   string,
-  { report: string; model: string; cachedAt: number }
+  {
+    report: string;
+    model: string;
+    cachedAt: number;
+  }
 >();
 
-function getClientIp(request: NextRequest): string {
+function getClientIp(request: NextRequest) {
   const xff = request.headers.get("x-forwarded-for");
 
   if (xff) {
     return xff.split(",")[0].trim();
   }
 
-  return (
-    request.headers.get("x-real-ip") || "unknown"
-  );
+  return request.headers.get("x-real-ip") || "unknown";
 }
 
-function hitRateLimit(ip: string): boolean {
+function hitRateLimit(ip: string) {
   const now = Date.now();
 
   if (rateLimitMap.size > 1000) {
@@ -92,11 +139,27 @@ function hitRateLimit(ip: string): boolean {
       count: 1,
       resetAt: now + RATE_LIMIT_WINDOW_MS,
     });
+
     return false;
   }
 
   entry.count += 1;
+
   return entry.count > RATE_LIMIT_PER_WINDOW;
+}
+
+function cleanupCache() {
+  const now = Date.now();
+
+  if (reportCache.size < 500) {
+    return;
+  }
+
+  for (const [key, value] of reportCache) {
+    if (now - value.cachedAt >= CACHE_TTL_MS) {
+      reportCache.delete(key);
+    }
+  }
 }
 
 export async function POST(request: NextRequest) {
@@ -121,31 +184,48 @@ export async function POST(request: NextRequest) {
       balance,
       riskScore,
       riskLevel,
+
       anomalies,
       transactions,
       tokenTransfers,
       internalTransactions,
+      counterparties,
+      secondHop,
+
       analyzedTransactionCount,
       analyzedTokenTransferCount,
       analyzedInternalTransactionCount,
+
       evidenceTransactionCount,
       evidenceTokenTransferCount,
       evidenceInternalTransactionCount,
+
+      language,
     }: {
       address: string;
       balance: string;
       riskScore: number;
       riskLevel: string;
+
       anomalies: Anomaly[];
+
       transactions: TransactionSummary[];
       tokenTransfers: TokenTransferSummary[];
       internalTransactions: InternalTransactionSummary[];
+
+      counterparties: CounterpartySummary[];
+
+      secondHop?: SecondHopSummary | null;
+
       analyzedTransactionCount: number;
       analyzedTokenTransferCount: number;
       analyzedInternalTransactionCount: number;
+
       evidenceTransactionCount: number;
       evidenceTokenTransferCount: number;
       evidenceInternalTransactionCount: number;
+
+      language?: Language;
     } = body;
 
     if (!address) {
@@ -159,8 +239,17 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 1) 缓存命中:相同地址在 TTL 内直接复用,省 DeepSeek 成本也省限流额度
-    const cached = reportCache.get(address);
+    const selectedLanguage: Language =
+      language === "en" ? "en" : "zh";
+
+    const normalizedAddress = address.trim().toLowerCase();
+
+    cleanupCache();
+
+    // 中文 / 英文使用不同缓存
+    const cacheKey = `v4:${selectedLanguage}:${normalizedAddress}`;
+
+    const cached = reportCache.get(cacheKey);
 
     if (
       cached &&
@@ -173,125 +262,232 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // 2) 限流:仅缓存未命中时才计数,防止恶意刷不同地址烧钱
     const clientIp = getClientIp(request);
 
     if (hitRateLimit(clientIp)) {
       return NextResponse.json(
         {
           error:
-            "请求过于频繁,请稍后再试(每分钟最多 " +
-            RATE_LIMIT_PER_WINDOW +
-            " 次)。",
+            selectedLanguage === "zh"
+              ? `请求过于频繁，请稍后再试。每分钟最多生成 ${RATE_LIMIT_PER_WINDOW} 次新的 AI 调查报告。`
+              : `Too many requests. You may generate up to ${RATE_LIMIT_PER_WINDOW} new AI reports per minute.`,
         },
-        { status: 429 }
+        {
+          status: 429,
+          headers: {
+            "Retry-After": "60",
+          },
+        }
       );
     }
 
     const anomalyText =
-      anomalies.length > 0
+      anomalies?.length > 0
         ? anomalies
             .map(
               (item, index) => `
-### 异常 ${index + 1}
+### Signal ${index + 1}
 
-- 类型：${item.type}
-- 严重程度：${item.severity}
-- 风险贡献：${item.score}
-- 说明：${item.description}
-- 证据交易：${item.evidenceHash || "无"}
+- Type: ${item.type}
+- Severity: ${item.severity}
+- Risk contribution: ${item.score}
+- Description: ${item.description}
+- Evidence transaction: ${item.evidenceHash || "N/A"}
 `
             )
             .join("\n")
-        : "当前规则没有检测到明显异常。";
+        : "No major anomaly signals were detected by the current rules.";
 
     const transactionText =
-      transactions.length > 0
+      transactions?.length > 0
         ? transactions
             .map(
               (tx, index) => `
-### ETH 普通交易 ${index + 1}
+### ETH Transaction ${index + 1}
 
-- 方向：${tx.direction}
-- 金额：${tx.valueEth} ETH
-- Tx Hash：${tx.hash}
-- From：${tx.from}
-- To：${tx.to}
-- Block：${tx.blockNumber}
-- 时间：${tx.time}
+- Direction: ${tx.direction}
+- Amount: ${tx.valueEth} ETH
+- Tx Hash: ${tx.hash}
+- From: ${tx.from}
+- To: ${tx.to}
+- Block: ${tx.blockNumber}
+- Time: ${tx.time}
 `
             )
             .join("\n")
-        : "没有普通 ETH 交易证据样本。";
+        : "No normal ETH transaction evidence is available.";
 
     const tokenText =
-      tokenTransfers.length > 0
+      tokenTransfers?.length > 0
         ? tokenTransfers
             .map(
               (tx, index) => `
-### ERC-20 转账 ${index + 1}
+### ERC-20 Transfer ${index + 1}
 
-- 方向：${tx.direction}
-- Token：${tx.tokenName} (${tx.symbol})
-- 数量：${tx.amount} ${tx.symbol}
-- Tx Hash：${tx.hash}
-- From：${tx.from}
-- To：${tx.to}
-- Token Contract：${tx.contractAddress}
-- Block：${tx.blockNumber}
-- 时间：${tx.time}
+- Direction: ${tx.direction}
+- Token: ${tx.tokenName} (${tx.symbol})
+- Amount: ${tx.amount} ${tx.symbol}
+- Tx Hash: ${tx.hash}
+- From: ${tx.from}
+- To: ${tx.to}
+- Token Contract: ${tx.contractAddress}
+- Block: ${tx.blockNumber}
+- Time: ${tx.time}
 `
             )
             .join("\n")
-        : "没有 ERC-20 Token 转账证据样本。";
+        : "No ERC-20 token transfer evidence is available.";
 
     const internalText =
-      internalTransactions.length > 0
+      internalTransactions?.length > 0
         ? internalTransactions
             .map(
               (tx, index) => `
 ### Internal Transaction ${index + 1}
 
-- 方向：${tx.direction}
-- 金额：${tx.valueEth} ETH
-- 调用类型：${tx.type || "unknown"}
-- Tx Hash：${tx.hash}
-- From：${tx.from}
-- To：${tx.to}
-- Block：${tx.blockNumber}
-- 时间：${tx.time}
-- 是否失败：${tx.isError === "1" ? "是" : "否"}
+- Direction: ${tx.direction}
+- Amount: ${tx.valueEth} ETH
+- Call Type: ${tx.type || "unknown"}
+- Tx Hash: ${tx.hash}
+- From: ${tx.from}
+- To: ${tx.to}
+- Block: ${tx.blockNumber}
+- Time: ${tx.time}
+- Failed: ${tx.isError === "1" ? "Yes" : "No"}
 `
             )
             .join("\n")
-        : "没有 Internal Transaction 证据样本。";
+        : "No internal transaction evidence is available.";
 
-    const systemPrompt = `
-你是 ChainScope AI，一个 Ethereum 链上资金行为调查助手。
+    const counterpartyText =
+      counterparties?.length > 0
+        ? counterparties
+            .slice(0, 10)
+            .map(
+              (item, index) => `
+### Counterparty ${index + 1}
 
-当前系统已经从三个数据源获取证据：
+- Address: ${item.address}
+- Interaction Events: ${item.interactionCount}
+- Outgoing Events: ${item.outgoingCount}
+- Incoming Events: ${item.incomingCount}
+- ETH Out: ${item.ethOut} ETH
+- ETH In: ${item.ethIn} ETH
+- ERC-20 Events: ${item.tokenEventCount}
+- Internal Events: ${item.internalEventCount}
+- Sources: ${item.sources.join(", ")}
+- Tokens: ${
+                item.tokenSymbols.length
+                  ? item.tokenSymbols.join(", ")
+                  : "None"
+              }
+- Last Interaction: ${item.lastInteraction}
+`
+            )
+            .join("\n")
+        : "No sufficient counterparty information is available.";
+
+    const secondHopText = secondHop
+      ? `
+### Automated Second-Hop Investigation
+
+- Root Address: ${secondHop.selectedFromAddress}
+- Selected First-Hop Counterparty: ${secondHop.investigatedAddress}
+- Selection Reason: ${secondHop.selectionReason}
+- ETH Transaction Sample: ${secondHop.transactionCount}
+- ERC-20 Sample: ${secondHop.tokenTransferCount}
+- Internal Transaction Sample: ${secondHop.internalTransactionCount}
+- Total Observed Events: ${secondHop.totalObservedEvents}
+- Root Address Observed Again: ${
+          secondHop.linksBackToRoot ? "Yes" : "No"
+        }
+- Observed Events With Root: ${secondHop.rootInteractionCount}
+
+Second-Hop Counterparties:
+
+${
+  secondHop.topCounterparties.length
+    ? secondHop.topCounterparties
+        .map(
+          (item, index) => `
+#### Connected Address ${index + 1}
+
+- Address: ${item.address}
+- Interaction Events: ${item.interactionCount}
+- Outgoing Events: ${item.outgoingCount}
+- Incoming Events: ${item.incomingCount}
+- ETH Out: ${item.ethOut}
+- ETH In: ${item.ethIn}
+- Sources: ${item.sources.join(", ")}
+- Tokens: ${
+            item.tokenSymbols.length
+              ? item.tokenSymbols.join(", ")
+              : "None"
+          }
+`
+        )
+        .join("\n")
+    : "No sufficient second-hop counterparty information is available."
+}
+`
+      : "No valid second-hop investigation was completed.";
+
+    const isZh = selectedLanguage === "zh";
+
+    const systemPrompt = isZh
+      ? `
+你是 ChainScope AI，一个 Ethereum 链上资金行为调查 Agent。
+
+系统提供：
 
 1. 普通 ETH Transactions
 2. ERC-20 Token Transfers
 3. Internal Transactions
+4. Counterparty Aggregation
+5. 自动 Second-Hop Investigation
 
-你的职责是解释这些真实链上证据，而不是创造新的事实。
+必须严格遵守：
 
-必须遵守：
-
-1. 不得编造地址身份、攻击、诈骗、洗钱、制裁、协议归属或资金来源。
+1. 不得编造身份、诈骗、攻击、洗钱、制裁、协议归属或资金来源。
 2. 异常行为不等于恶意行为。
-3. 必须区分“事实”和“可能解释”。
-4. 结论必须尽可能对应真实 Tx Hash。
-5. 证据不足时必须明确说明不确定。
-6. Risk Score 是实验性启发式评分，不是正式安全评级。
-7. 必须使用简体中文。
-8. 输出标准 Markdown。
-9. 从二级标题开始，不要使用一级标题。
-10. 不得声称执行了程序实际没有执行的分析。
+3. 对手方行为不能自动归因于根地址。
+4. 二跳地址行为不能直接计入根地址 Risk Score。
+5. Risk Score 只基于根地址确定性启发式规则。
+6. 必须区分链上事实、程序计算结果和可能解释。
+7. 证据不足时必须明确说明不确定。
+8. 必须使用简体中文。
+9. 输出标准 Markdown。
+10. 从二级标题开始。
+11. 不得声称执行了系统实际上没有执行的分析。
+`
+      : `
+You are ChainScope AI, an Ethereum on-chain investigation agent.
+
+The system provides:
+
+1. Normal ETH Transactions
+2. ERC-20 Token Transfers
+3. Internal Transactions
+4. Counterparty Aggregation
+5. Automated Second-Hop Investigation
+
+You must follow these rules:
+
+1. Never invent identities, scams, hacks, money laundering, sanctions, protocol ownership, or sources of funds.
+2. Anomalous behavior does not prove malicious behavior.
+3. Counterparty behavior must not automatically be attributed to the root address.
+4. Second-hop behavior must not be included directly in the root Risk Score.
+5. The Risk Score is based only on deterministic heuristic rules for the root address.
+6. Clearly distinguish blockchain facts, program calculations, and interpretations.
+7. Clearly express uncertainty when evidence is insufficient.
+8. Write entirely in English.
+9. Use standard Markdown.
+10. Start from level-two headings.
+11. Never claim that the system performed an investigation it did not actually perform.
 `;
 
-    const userPrompt = `
+    const userPrompt = isZh
+      ? `
 调查地址：
 
 ${address}
@@ -310,122 +506,207 @@ ${riskLevel}
 
 ## 数据规模
 
-普通 ETH Transactions：
+普通 ETH：
+- 系统分析：${analyzedTransactionCount}
+- AI 详细阅读：${evidenceTransactionCount}
 
-- 系统分析：${analyzedTransactionCount} 笔
-- AI 详细阅读：${evidenceTransactionCount} 笔
+ERC-20：
+- 系统分析：${analyzedTokenTransferCount}
+- AI 详细阅读：${evidenceTokenTransferCount}
 
-ERC-20 Token Transfers：
+Internal：
+- 系统分析：${analyzedInternalTransactionCount}
+- AI 详细阅读：${evidenceInternalTransactionCount}
 
-- 系统分析：${analyzedTokenTransferCount} 笔
-- AI 详细阅读：${evidenceTokenTransferCount} 笔
-
-Internal Transactions：
-
-- 系统分析：${analyzedInternalTransactionCount} 笔
-- AI 详细阅读：${evidenceInternalTransactionCount} 笔
-
-## 异常检测结果
+## 异常信号
 
 ${anomalyText}
 
-## 普通 ETH 交易
+## 普通 ETH 证据
 
 ${transactionText}
 
-## ERC-20 Token 转账
+## ERC-20 证据
 
 ${tokenText}
 
-## Internal Transactions
+## Internal 证据
 
 ${internalText}
 
-请生成专业、简洁、适合黑客松 Demo 的调查报告。
+## 第一跳对手方
+
+${counterpartyText}
+
+## 二跳调查
+
+${secondHopText}
+
+请生成一份专业、简洁、适合黑客松 Demo 的中文 Ethereum 调查报告。
 
 严格使用：
 
 ## 执行摘要
 
-概括：
-- 钱包主要资金行为
-- 三类链上数据之间的关系
-- Risk Score
-- 最重要异常
-- 不要把异常直接等同于恶意
-
 ## 主要发现
 
-编号列出关键发现。
+## 第一跳资金关系
 
-每个发现必须包含：
+## 二跳调查结果
 
-**发现名称**
+必须明确说明：
+二跳地址与根地址的关联不意味着共同身份、共同控制或恶意关系。
 
-- 观测事实
-- 对应数据来源
-- 为什么异常
-- 可能解释
-- 风险意义
+## 多来源行为分析
 
-## 多来源资金行为分析
+### 普通 ETH
 
-### 普通 ETH 行为
+### ERC-20
 
-### ERC-20 Token 行为
+### Internal Transactions
 
-### Internal Transactions 行为
-
-说明三者之间有没有明显关联。
+### 跨来源关联
 
 ## 关键证据
 
-Markdown 表格：
+使用：
 
-| 数据源 | 资产/行为 | Tx Hash | 方向 | 说明 |
+| 层级 | 数据源 | 地址 / Tx Hash | 行为 | 说明 |
 | --- | --- | --- | --- | --- |
-
-只能引用真实提供的 Tx Hash。
 
 ## 风险解释
 
-解释：
-
-- ${riskScore}/100 的意义
-- 哪些异常贡献最大
-- 为什么异常 ≠ 恶意
+解释 ${riskScore}/100 的意义，以及为什么异常不等于恶意。
 
 ## 建议进一步调查
-
-给出 3～6 条建议，例如：
-
-- 更长历史窗口
-- 地址标签
-- 对手方画像
-- DeFi 协议识别
-- Token 资金去向
-- 合约调用语义
-
-不能声称已经完成。
 
 ## 置信度与局限性
 
 必须说明：
 
-- 当前数据样本有限
-- 三类数据源均只获取最近部分记录
-- 当前规则属于 MVP 启发式规则
-- 尚未完成完整地址标签和协议语义识别
-- Risk Score 不是正式安全评级
+- 当前数据基于有限最近样本
+- 二跳只自动追踪一个主要第一跳对手方
+- 二跳结果不直接影响根地址 Risk Score
+- 当前没有完整地址实体标签
+- 当前没有完整协议语义识别
+- 当前属于 MVP 启发式分析
+- AI 只解释系统提供的证据
 
 最后写：
 
-> 本报告用于链上行为调查辅助，不构成对地址所有者身份、意图或合法性的判断。
+> 本报告用于链上行为调查辅助，不构成对任何地址所有者身份、意图或合法性的判断。
+`
+      : `
+Investigated Address:
+
+${address}
+
+Current ETH Balance:
+
+${balance} ETH
+
+Risk Score:
+
+${riskScore}/100
+
+Risk Level:
+
+${riskLevel}
+
+## Data Scope
+
+Normal ETH:
+- Program analyzed: ${analyzedTransactionCount}
+- AI detailed evidence: ${evidenceTransactionCount}
+
+ERC-20:
+- Program analyzed: ${analyzedTokenTransferCount}
+- AI detailed evidence: ${evidenceTokenTransferCount}
+
+Internal:
+- Program analyzed: ${analyzedInternalTransactionCount}
+- AI detailed evidence: ${evidenceInternalTransactionCount}
+
+## Anomaly Signals
+
+${anomalyText}
+
+## ETH Evidence
+
+${transactionText}
+
+## ERC-20 Evidence
+
+${tokenText}
+
+## Internal Evidence
+
+${internalText}
+
+## First-Hop Counterparties
+
+${counterpartyText}
+
+## Second-Hop Investigation
+
+${secondHopText}
+
+Generate a professional and concise Ethereum investigation report suitable for a hackathon demo.
+
+Use exactly this structure:
+
+## Executive Summary
+
+## Key Findings
+
+## First-Hop Relationships
+
+## Second-Hop Investigation
+
+Explicitly state that second-hop relationships do not prove shared identity, ownership, control, or malicious intent.
+
+## Multi-Source Behavior Analysis
+
+### Normal ETH
+
+### ERC-20
+
+### Internal Transactions
+
+### Cross-Source Relationships
+
+## Key Evidence
+
+Use:
+
+| Layer | Source | Address / Tx Hash | Behavior | Notes |
+| --- | --- | --- | --- | --- |
+
+## Risk Interpretation
+
+Explain the meaning of ${riskScore}/100 and why anomalous behavior does not prove malicious intent.
+
+## Recommended Next Steps
+
+## Confidence & Limitations
+
+Explicitly state:
+
+- The investigation uses a limited recent sample.
+- Only one primary first-hop counterparty is automatically traced.
+- Second-hop behavior does not directly affect the root Risk Score.
+- Full entity attribution is not currently available.
+- Full protocol semantic interpretation is not currently available.
+- Current detection rules are MVP heuristics.
+- AI only explains evidence supplied by the system.
+
+End with:
+
+> This report is intended to assist on-chain investigation and does not determine the identity, intent, or legality of any address owner.
 `;
 
     const proxyUrl =
-      process.env.HTTPS_PROXY ||
-      process.env.HTTP_PROXY;
+      process.env.HTTPS_PROXY || process.env.HTTP_PROXY;
 
     const dispatcher = proxyUrl
       ? new ProxyAgent(proxyUrl)
@@ -436,12 +717,15 @@ Markdown 表格：
       {
         method: "POST",
         dispatcher,
+
         headers: {
           Authorization: `Bearer ${apiKey}`,
           "Content-Type": "application/json",
         },
+
         body: JSON.stringify({
           model: "deepseek-chat",
+
           messages: [
             {
               role: "system",
@@ -452,6 +736,7 @@ Markdown 表格：
               content: userPrompt,
             },
           ],
+
           temperature: 0.2,
           stream: false,
         }),
@@ -461,8 +746,6 @@ Markdown 表格：
     const data = (await response.json()) as any;
 
     if (!response.ok) {
-      console.error("DeepSeek API error:", data);
-
       return NextResponse.json(
         {
           error:
@@ -489,22 +772,23 @@ Markdown 表格：
       );
     }
 
-    reportCache.set(address, {
+    const model = data.model || "deepseek-chat";
+
+    reportCache.set(cacheKey, {
       report,
-      model: data.model || "deepseek-chat",
+      model,
       cachedAt: Date.now(),
     });
 
     return NextResponse.json({
       report,
-      model: data.model || "deepseek-chat",
+      model,
+      cached: false,
+      language: selectedLanguage,
       usingProxy: Boolean(proxyUrl),
     });
   } catch (error) {
-    console.error(
-      "DeepSeek investigation error:",
-      error
-    );
+    console.error("DeepSeek investigation error:", error);
 
     return NextResponse.json(
       {
