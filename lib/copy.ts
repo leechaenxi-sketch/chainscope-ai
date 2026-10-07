@@ -62,9 +62,9 @@ export const copy = {
   en: {
     subtitle: "On-chain Behavior Change Investigation Agent",
     network: "Ethereum Mainnet",
-    heroTitle: "Trace · Discern. Everything hidden leaves a trace.",
-    heroLine1: "Trace · Discern",
-    heroLine2: "Everything hidden leaves a trace.",
+    heroTitle: "Follow the funds. Understand the change.",
+    heroLine1: "Follow the funds. Understand the change.",
+    heroLine2: "",
     heroDescription: "Start with an Ethereum address. Compare past behavior, trace relationships, and examine anomalies and potential risks through on-chain evidence.",
     placeholder: "Enter Ethereum address: 0x...",
     start: "Start Investigation",
