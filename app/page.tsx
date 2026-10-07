@@ -93,6 +93,81 @@ type SecondHopResult = {
   rootInteractionCount: number;
 };
 
+type ChangeMetric = {
+  key: string;
+
+  labelZh: string;
+  labelEn: string;
+
+  baseline: number;
+  recent: number;
+
+  unitZh: string;
+  unitEn: string;
+
+  direction:
+    | "UP"
+    | "DOWN"
+    | "STABLE";
+
+  magnitude: number;
+
+  important: boolean;
+
+  explanationZh: string;
+  explanationEn: string;
+};
+
+type CauseHypothesis = {
+  id: string;
+
+  titleZh: string;
+  titleEn: string;
+
+  confidence:
+    | "LOW"
+    | "MEDIUM"
+    | "HIGH";
+
+  evidenceZh: string[];
+  evidenceEn: string[];
+
+  explanationZh: string;
+  explanationEn: string;
+};
+
+type ImpactItem = {
+  id: string;
+
+  categoryZh: string;
+  categoryEn: string;
+
+  titleZh: string;
+  titleEn: string;
+
+  descriptionZh: string;
+  descriptionEn: string;
+
+  severity:
+    | "LOW"
+    | "MEDIUM"
+    | "HIGH";
+};
+
+type ChangeAnalysis = {
+  recentStart: number;
+  baselineStart: number;
+
+  metrics: ChangeMetric[];
+
+  causes: CauseHypothesis[];
+
+  impacts: ImpactItem[];
+
+  summaryZh: string;
+  summaryEn: string;
+};
+
 type Tab =
   | "overview"
   | "trace"
@@ -101,214 +176,201 @@ type Tab =
 
 const copy = {
   zh: {
-    subtitle: "以太坊链上调查智能体",
+    subtitle: "以太坊链上变化调查智能体",
     network: "Ethereum 主网",
 
-    heroEyebrow: "链上智能调查",
-    heroTitle1: "看清资金流向，",
-    heroTitle2: "而不是淹没在数据里。",
+    heroEyebrow: "链上变化调查",
+    heroTitle1: "不仅发现异常，",
+    heroTitle2: "还解释为什么，以及可能影响什么。",
     heroDescription:
-      "整合 ETH、ERC-20、内部交易、对手方关系与自动二跳追踪，让复杂链上行为变得清晰可解释。",
+      "ChainScope 对比近期与基准行为，识别资金活动变化，并结合 ETH、ERC-20、Internal 与多跳关系分析变化原因和潜在影响。",
 
     placeholder: "输入 Ethereum 地址：0x...",
     start: "开始调查",
     investigating: "调查中...",
 
-    initialStatus: "输入一个 Ethereum 地址开始调查。",
+    initialStatus:
+      "输入一个 Ethereum 地址开始调查。",
 
-    overview: "总览",
+    overview: "变化分析",
     trace: "Agent 追踪",
     report: "AI 报告",
     evidence: "原始证据",
 
     rootRisk: "根地址风险",
-    rootRiskDesc: "仅评估当前被调查地址",
-
     observedEvents: "观测事件",
-    signals: "异常信号",
-    signalDesc: "可解释的行为异常指标",
-
+    changeSignals: "明显变化",
     agentTrace: "Agent 追踪",
-    hopDone: "已追踪 1 跳",
-    noHop: "未追踪",
-    hopDoneDesc: "自动深入调查一个直接对手方",
-    noHopDesc: "没有找到合适的二跳目标",
 
-    keySignals: "核心异常信号",
-    keySignalsDesc: "当前地址最值得关注的行为异常。",
+    whatChanged: "发生了什么变化",
+    whatChangedDesc:
+      "程序对比近期行为与前一个基准窗口，找出真正发生变化的指标。",
 
-    directCounterparties: "直接对手方",
-    directCounterpartiesDesc:
-      "与当前被调查地址直接发生链上交互的地址。",
+    whyChanged: "为什么可能发生变化",
+    whyChangedDesc:
+      "基于已观测链上证据形成多个原因假设，而不是直接猜测唯一原因。",
 
-    investigationPath: "调查路径",
-    investigationPathDesc:
-      "清楚展示 ChainScope 如何从根地址逐步向下一层关系追踪。",
+    potentialImpact: "潜在影响",
+    potentialImpactDesc:
+      "分析当前变化如果持续，可能对资金、关系网络和后续调查造成什么影响。",
 
-    howToRead: "如何理解这张图",
-    howToReadDesc:
-      "根地址是你输入的地址。ChainScope 会从它的直接对手方中自动选择一个值得进一步调查的地址，然后继续分析该地址的主要关系。第二跳地址并不一定与最初的根地址存在直接关系。",
+    supportingEvidence: "支撑证据",
+    supportingEvidenceDesc:
+      "异常、对手方和第二跳用于支撑变化解释，而不是作为最终结论。",
+
+    recent: "近期",
+    baseline: "基准",
+    confidence: "置信度",
+
+    high: "高",
+    medium: "中",
+    low: "低",
+
+    noChange:
+      "当前样本中没有检测到明显行为变化。",
+    noCause:
+      "当前证据不足以形成明确原因假设。",
+    noImpact:
+      "当前没有检测到显著潜在影响。",
+
+    traceTitle: "Agent 调查路径",
+    traceDesc:
+      "当程序发现值得继续验证的关系时，Agent 会自动选择一个直接对手方继续调查。",
 
     rootWallet: "根地址",
-    investigatedAddress: "被调查地址",
-    rootDesc: "这是用户最初输入的 Ethereum 地址。",
-
-    firstHop: "第一跳",
-    selectedCounterparty: "Agent 自动选择的直接对手方",
-    selectedDesc:
-      "ChainScope 根据交互强度和多来源信号自动选择该地址继续调查。",
-
-    directRelationship: "直接链上关系",
-    agentInvestigates: "Agent 继续调查此地址",
-
-    secondHop: "第二跳",
-    connectedAddresses: "该第一跳地址的主要关联地址",
-    connectedDesc:
-      "以下地址主要与第一跳地址发生交互，不代表它们一定与根地址存在直接关系。",
-
-    connectedAddress: "关联地址",
-    events: "次事件",
-    outgoing: "转出",
-    incoming: "转入",
+    directRelation: "直接链上关系",
+    firstHop: "第一跳调查目标",
+    continueInvestigation: "Agent 继续调查",
+    secondHop: "第二跳关系",
+    secondHopDesc:
+      "这些地址主要与第一跳地址交互，不一定直接与根地址有关。",
 
     important: "重要说明",
-    importantDesc:
-      "第二跳地址的行为不会计入根地址 Risk Score。地址之间存在关系，也不代表它们具有相同身份、共同控制关系或恶意意图。",
+    importantText:
+      "第二跳行为不会直接加入根地址 Risk Score。链上关系也不等于共同身份、共同控制或恶意行为。",
 
-    aiReport: "AI 调查报告",
-    aiReportDesc:
-      "DeepSeek 负责解释 ChainScope 已经计算和收集到的链上证据。",
-    generatingReport: "正在生成调查报告...",
+    reportTitle: "AI 变化调查报告",
+    reportDesc:
+      "DeepSeek 只负责解释程序计算出的变化、原因假设、潜在影响和真实链上证据。",
 
-    evidenceExplorer: "证据浏览器",
-    evidenceExplorerDesc:
-      "原始区块链记录默认折叠，需要核查结论时再展开查看。",
+    evidenceTitle: "原始证据",
+    evidenceDesc:
+      "与异常规则直接关联的交易会自动标记为重点证据，其余记录仍可用于人工核查。",
 
-    anomalySignals: "异常信号",
+    anomalies: "异常信号",
     ethTransactions: "ETH 普通交易",
     tokenTransfers: "ERC-20 转账",
     internalTransactions: "Internal Transactions",
 
-    noSignals: "当前没有检测到明显异常信号。",
-    noReport: "暂未生成 AI 调查报告。",
-    noSecondHop: "没有找到适合自动继续追踪的第一跳地址。",
+    noSecondHop:
+      "当前没有找到适合继续自动追踪的直接对手方。",
 
-    firstHopSelected:
-      "Agent 已选择该直接对手方继续调查，因为它具有较高的交互强度和跨来源行为信号。",
+    generating:
+      "正在生成变化调查报告...",
 
-    viewTrace: "查看完整调查路径 →",
-
-    ethTx: "ETH 交易",
-    internal: "Internal",
-    nextHop: "下一跳地址",
-
-    rootScoreOnly: "仅根地址",
+    flaggedEvidence: "重点证据",
+    flaggedCount: "条重点证据",
+    evidenceReason:
+      "该交易被至少一个异常检测规则引用。",
   },
 
   en: {
-    subtitle: "Ethereum Investigation Agent",
+    subtitle: "Ethereum Change Investigation Agent",
     network: "Ethereum Mainnet",
 
-    heroEyebrow: "On-chain Intelligence",
-    heroTitle1: "Follow the money,",
-    heroTitle2: "not the noise.",
+    heroEyebrow: "On-chain Change Investigation",
+    heroTitle1: "Detect what changed,",
+    heroTitle2: "explain why and what it may affect.",
     heroDescription:
-      "Combine ETH, ERC-20, internal transactions, counterparty relationships and autonomous second-hop tracing into one clear investigation.",
+      "ChainScope compares recent behavior with a baseline, detects meaningful changes, and uses ETH, ERC-20, internal transactions and multi-hop relationships to explain possible causes and impacts.",
 
     placeholder: "Enter Ethereum address: 0x...",
     start: "Start Investigation",
     investigating: "Investigating...",
 
-    initialStatus: "Enter an Ethereum address to begin.",
+    initialStatus:
+      "Enter an Ethereum address to begin.",
 
-    overview: "Overview",
+    overview: "Change Analysis",
     trace: "Agent Trace",
     report: "AI Report",
     evidence: "Evidence",
 
     rootRisk: "Root Risk",
-    rootRiskDesc: "Evaluates the investigated root address only",
-
     observedEvents: "Observed Events",
-    signals: "Signals",
-    signalDesc: "Explainable behavioral anomaly indicators",
-
+    changeSignals: "Major Changes",
     agentTrace: "Agent Trace",
-    hopDone: "1 Hop Traced",
-    noHop: "No Trace",
-    hopDoneDesc: "One direct counterparty investigated further",
-    noHopDesc: "No suitable second-hop target",
 
-    keySignals: "Key Signals",
-    keySignalsDesc:
-      "The most relevant behavioral anomalies around the investigated wallet.",
+    whatChanged: "What Changed",
+    whatChangedDesc:
+      "The program compares recent behavior with the previous baseline window to identify meaningful changes.",
 
-    directCounterparties: "Direct Counterparties",
-    directCounterpartiesDesc:
-      "Addresses directly interacting with the investigated wallet.",
+    whyChanged: "Why It May Have Changed",
+    whyChangedDesc:
+      "Possible causes are formed from observed on-chain evidence instead of assuming a single explanation.",
 
-    investigationPath: "Investigation Path",
-    investigationPathDesc:
-      "See exactly how ChainScope moves from the root address to the next relationship layer.",
+    potentialImpact: "Potential Impact",
+    potentialImpactDesc:
+      "What the observed change may affect if the behavior continues.",
 
-    howToRead: "How to read this",
-    howToReadDesc:
-      "The root wallet is the address you entered. ChainScope automatically selects one direct counterparty for deeper investigation. The second-hop addresses shown afterward are relationships of that selected address and are not necessarily directly connected to the original root wallet.",
+    supportingEvidence: "Supporting Evidence",
+    supportingEvidenceDesc:
+      "Anomalies, counterparties and second-hop relationships support the explanation rather than acting as the conclusion.",
+
+    recent: "Recent",
+    baseline: "Baseline",
+    confidence: "Confidence",
+
+    high: "High",
+    medium: "Medium",
+    low: "Low",
+
+    noChange:
+      "No major behavioral change was detected in the current sample.",
+    noCause:
+      "Current evidence is insufficient to form a strong cause hypothesis.",
+    noImpact:
+      "No significant potential impact was detected.",
+
+    traceTitle: "Agent Investigation Path",
+    traceDesc:
+      "When a relationship is worth validating, the agent automatically selects one direct counterparty for deeper investigation.",
 
     rootWallet: "Root Wallet",
-    investigatedAddress: "Investigated Address",
-    rootDesc: "This is the Ethereum address entered by the user.",
-
-    firstHop: "First Hop",
-    selectedCounterparty: "Agent-selected Direct Counterparty",
-    selectedDesc:
-      "ChainScope selected this address based on interaction strength and cross-source signals.",
-
-    directRelationship: "Direct on-chain relationship",
-    agentInvestigates: "Agent investigates this address",
-
-    secondHop: "Second Hop",
-    connectedAddresses: "Connected addresses of the selected first-hop target",
-    connectedDesc:
-      "These addresses mainly interact with the selected first-hop address and are not necessarily directly related to the original root wallet.",
-
-    connectedAddress: "Connected Address",
-    events: "events",
-    outgoing: "Outgoing",
-    incoming: "Incoming",
+    directRelation: "Direct on-chain relationship",
+    firstHop: "First-Hop Investigation Target",
+    continueInvestigation: "Agent continues investigation",
+    secondHop: "Second-Hop Relationships",
+    secondHopDesc:
+      "These addresses mainly interact with the selected first-hop address and are not necessarily directly related to the root wallet.",
 
     important: "Important",
-    importantDesc:
-      "Second-hop behavior does not affect the root Risk Score. A relationship between addresses does not prove shared identity, common control, ownership, or malicious intent.",
+    importantText:
+      "Second-hop behavior does not directly affect the root Risk Score. An on-chain relationship does not prove shared identity, control, ownership or malicious intent.",
 
-    aiReport: "AI Investigation Report",
-    aiReportDesc:
-      "DeepSeek explains deterministic evidence collected and calculated by ChainScope.",
-    generatingReport: "Generating investigation report...",
+    reportTitle: "AI Change Investigation Report",
+    reportDesc:
+      "DeepSeek only explains deterministic changes, cause hypotheses, potential impacts and real blockchain evidence supplied by ChainScope.",
 
-    evidenceExplorer: "Evidence Explorer",
-    evidenceExplorerDesc:
-      "Raw blockchain records stay collapsed until you need to verify the investigation.",
+    evidenceTitle: "Raw Evidence",
+    evidenceDesc:
+      "Transactions directly referenced by anomaly rules are automatically highlighted while the remaining records stay available for verification.",
 
-    anomalySignals: "Anomaly Signals",
+    anomalies: "Anomaly Signals",
     ethTransactions: "ETH Transactions",
     tokenTransfers: "ERC-20 Transfers",
     internalTransactions: "Internal Transactions",
 
-    noSignals: "No major anomaly signals were detected.",
-    noReport: "No AI investigation report generated yet.",
-    noSecondHop: "No suitable first-hop address was selected for deeper tracing.",
+    noSecondHop:
+      "No suitable direct counterparty was selected for deeper tracing.",
 
-    firstHopSelected:
-      "The agent selected this direct counterparty because it produced a stronger interaction and cross-source investigation signal.",
+    generating:
+      "Generating change investigation report...",
 
-    viewTrace: "View investigation path →",
-
-    ethTx: "ETH Tx",
-    internal: "Internal",
-    nextHop: "Next-hop",
-
-    rootScoreOnly: "Root address only",
+    flaggedEvidence: "Flagged Evidence",
+    flaggedCount: "flagged",
+    evidenceReason:
+      "This transaction is referenced by at least one anomaly detection rule.",
   },
 };
 
@@ -333,45 +395,132 @@ export default function Home() {
   const [aiLoading, setAiLoading] =
     useState(false);
 
-  const [transactions, setTransactions] =
+  const [
+    transactions,
+    setTransactions,
+  ] =
     useState<Transaction[]>([]);
 
-  const [tokenTransfers, setTokenTransfers] =
+  const [
+    tokenTransfers,
+    setTokenTransfers,
+  ] =
     useState<TokenTransfer[]>([]);
 
   const [
     internalTransactions,
     setInternalTransactions,
-  ] = useState<InternalTransaction[]>([]);
+  ] =
+    useState<
+      InternalTransaction[]
+    >([]);
 
-  const [counterparties, setCounterparties] =
+  const [
+    counterparties,
+    setCounterparties,
+  ] =
     useState<Counterparty[]>([]);
 
-  const [secondHop, setSecondHop] =
-    useState<SecondHopResult | null>(null);
+  const [
+    secondHop,
+    setSecondHop,
+  ] =
+    useState<SecondHopResult | null>(
+      null
+    );
 
-  const [anomalies, setAnomalies] =
+  const [
+    anomalies,
+    setAnomalies,
+  ] =
     useState<Anomaly[]>([]);
 
-  const [riskScore, setRiskScore] =
-    useState<number | null>(null);
+  const [
+    changeAnalysis,
+    setChangeAnalysis,
+  ] =
+    useState<ChangeAnalysis | null>(
+      null
+    );
 
-  const [aiReport, setAiReport] =
+  const [
+    riskScore,
+    setRiskScore,
+  ] =
+    useState<number | null>(
+      null
+    );
+
+  const [
+    aiReport,
+    setAiReport,
+  ] =
     useState("");
 
-  const [activeTab, setActiveTab] =
+  const [
+    activeTab,
+    setActiveTab,
+  ] =
     useState<Tab>("overview");
 
-  function updateLanguage(next: Language) {
+  const flaggedHashes =
+    useMemo(() => {
+      return new Set(
+        anomalies
+          .map((item) =>
+            item.evidenceHash?.toLowerCase()
+          )
+          .filter(
+            (
+              value
+            ): value is string =>
+              Boolean(value)
+          )
+      );
+    }, [anomalies]);
+
+  const flaggedEthCount =
+    transactions.filter((tx) =>
+      flaggedHashes.has(
+        tx.hash?.toLowerCase()
+      )
+    ).length;
+
+  const flaggedTokenCount =
+    tokenTransfers.filter((tx) =>
+      flaggedHashes.has(
+        tx.hash?.toLowerCase()
+      )
+    ).length;
+
+  const flaggedInternalCount =
+    internalTransactions.filter((tx) =>
+      flaggedHashes.has(
+        tx.hash?.toLowerCase()
+      )
+    ).length;
+
+  function updateLanguage(
+    next: Language
+  ) {
     setLanguage(next);
 
-    if (!loading && riskScore === null) {
-      setStatus(copy[next].initialStatus);
+    if (
+      !loading &&
+      riskScore === null
+    ) {
+      setStatus(
+        copy[next].initialStatus
+      );
     }
   }
 
   async function startInvestigation() {
-    if (!ethers.isAddress(address)) {
+    if (
+      !ethers.isAddress(
+        address
+      )
+    ) {
       setStatus(
         language === "zh"
           ? "请输入有效的 Ethereum 地址。"
@@ -393,14 +542,19 @@ export default function Home() {
       setTransactions([]);
       setTokenTransfers([]);
       setInternalTransactions([]);
+
       setCounterparties([]);
       setSecondHop(null);
 
       setAnomalies([]);
+      setChangeAnalysis(null);
+
       setRiskScore(null);
       setAiReport("");
 
-      setActiveTab("overview");
+      setActiveTab(
+        "overview"
+      );
 
       setStatus(
         language === "zh"
@@ -414,54 +568,62 @@ export default function Home() {
         );
 
       const balanceWei =
-        await provider.getBalance(address);
+        await provider.getBalance(
+          address
+        );
 
       const formattedBalance =
         Number(
-          ethers.formatEther(balanceWei)
+          ethers.formatEther(
+            balanceWei
+          )
         ).toFixed(4);
 
-      setBalance(formattedBalance);
+      setBalance(
+        formattedBalance
+      );
 
       setStatus(
         language === "zh"
-          ? "正在收集链上证据..."
-          : "Collecting on-chain evidence..."
+          ? "正在收集 ETH、ERC-20 和 Internal 数据..."
+          : "Collecting ETH, ERC-20 and Internal data..."
       );
 
       const [
         txResponse,
         tokenResponse,
         internalResponse,
-      ] = await Promise.all([
-        fetch(
-          `/api/transactions?address=${encodeURIComponent(
-            address
-          )}`
-        ),
+      ] =
+        await Promise.all([
+          fetch(
+            `/api/transactions?address=${encodeURIComponent(
+              address
+            )}`
+          ),
 
-        fetch(
-          `/api/tokentx?address=${encodeURIComponent(
-            address
-          )}`
-        ),
+          fetch(
+            `/api/tokentx?address=${encodeURIComponent(
+              address
+            )}`
+          ),
 
-        fetch(
-          `/api/internal-transactions?address=${encodeURIComponent(
-            address
-          )}`
-        ),
-      ]);
+          fetch(
+            `/api/internal-transactions?address=${encodeURIComponent(
+              address
+            )}`
+          ),
+        ]);
 
       const [
         txData,
         tokenData,
         internalData,
-      ] = await Promise.all([
-        txResponse.json(),
-        tokenResponse.json(),
-        internalResponse.json(),
-      ]);
+      ] =
+        await Promise.all([
+          txResponse.json(),
+          tokenResponse.json(),
+          internalResponse.json(),
+        ]);
 
       if (!txResponse.ok) {
         throw new Error(
@@ -477,7 +639,9 @@ export default function Home() {
         );
       }
 
-      if (!internalResponse.ok) {
+      if (
+        !internalResponse.ok
+      ) {
         throw new Error(
           internalData.error ||
             "Failed to retrieve internal transactions"
@@ -485,28 +649,42 @@ export default function Home() {
       }
 
       const txItems: Transaction[] =
-        Array.isArray(txData.items)
+        Array.isArray(
+          txData.items
+        )
           ? txData.items
           : [];
 
       const tokenItems: TokenTransfer[] =
-        Array.isArray(tokenData.items)
+        Array.isArray(
+          tokenData.items
+        )
           ? tokenData.items
           : [];
 
       const internalItems: InternalTransaction[] =
-        Array.isArray(internalData.items)
+        Array.isArray(
+          internalData.items
+        )
           ? internalData.items
           : [];
 
-      setTransactions(txItems);
-      setTokenTransfers(tokenItems);
-      setInternalTransactions(internalItems);
+      setTransactions(
+        txItems
+      );
+
+      setTokenTransfers(
+        tokenItems
+      );
+
+      setInternalTransactions(
+        internalItems
+      );
 
       setStatus(
         language === "zh"
-          ? "正在构建资金关系..."
-          : "Building transaction relationships..."
+          ? "正在构建对手方关系..."
+          : "Building counterparty relationships..."
       );
 
       const firstHopCounterparties =
@@ -517,12 +695,14 @@ export default function Home() {
           rootAddress
         );
 
-      setCounterparties(firstHopCounterparties);
+      setCounterparties(
+        firstHopCounterparties
+      );
 
       setStatus(
         language === "zh"
-          ? "正在检测异常行为..."
-          : "Detecting anomalous behavior..."
+          ? "正在检测行为异常..."
+          : "Detecting behavioral anomalies..."
       );
 
       const detected = [
@@ -546,15 +726,40 @@ export default function Home() {
         ),
       ];
 
-      setAnomalies(detected);
+      setAnomalies(
+        detected
+      );
 
       const score =
-        calculateRiskScore(detected);
+        calculateRiskScore(
+          detected
+        );
 
       setRiskScore(score);
 
       const riskLevel =
-        getRiskLevel(score).label;
+        getRiskLevel(
+          score
+        ).label;
+
+      setStatus(
+        language === "zh"
+          ? "正在比较近期行为与基准行为..."
+          : "Comparing recent behavior with baseline behavior..."
+      );
+
+      const changeResult =
+        analyzeBehaviorChange(
+          txItems,
+          tokenItems,
+          internalItems,
+          firstHopCounterparties,
+          rootAddress
+        );
+
+      setChangeAnalysis(
+        changeResult
+      );
 
       let secondHopResult:
         | SecondHopResult
@@ -566,19 +771,22 @@ export default function Home() {
           rootAddress
         );
 
-      if (selectedCounterparty) {
+      if (
+        selectedCounterparty
+      ) {
         setStatus(
           language === "zh"
-            ? "Agent 正在自动追踪最值得关注的直接对手方..."
-            : "Agent is tracing the most relevant direct counterparty..."
+            ? "Agent 正在验证主要对手方关系..."
+            : "Agent is validating a major counterparty relationship..."
         );
 
         try {
-          const response = await fetch(
-            `/api/second-hop?address=${encodeURIComponent(
-              selectedCounterparty.address
-            )}`
-          );
+          const response =
+            await fetch(
+              `/api/second-hop?address=${encodeURIComponent(
+                selectedCounterparty.address
+              )}`
+            );
 
           const data =
             await response.json();
@@ -591,12 +799,16 @@ export default function Home() {
           }
 
           const secondTxs: Transaction[] =
-            Array.isArray(data.transactions)
+            Array.isArray(
+              data.transactions
+            )
               ? data.transactions
               : [];
 
           const secondTokens: TokenTransfer[] =
-            Array.isArray(data.tokenTransfers)
+            Array.isArray(
+              data.tokenTransfers
+            )
               ? data.tokenTransfers
               : [];
 
@@ -628,7 +840,7 @@ export default function Home() {
 
             selectionReason:
               language === "zh"
-                ? `Agent 根据该地址的 ${selectedCounterparty.interactionCount} 次观测交互以及 ${selectedCounterparty.sources.length} 类数据来源信号，自动选择它继续调查。`
+                ? `Agent 根据该地址的 ${selectedCounterparty.interactionCount} 次观测交互和 ${selectedCounterparty.sources.length} 类数据来源信号，选择它进行进一步调查。`
                 : `The agent selected this address because it has ${selectedCounterparty.interactionCount} observed interaction events across ${selectedCounterparty.sources.length} data source(s).`,
 
             transactionCount:
@@ -644,15 +856,22 @@ export default function Home() {
               secondCounterparties,
 
             linksBackToRoot:
-              Boolean(rootRelationship),
+              Boolean(
+                rootRelationship
+              ),
 
             rootInteractionCount:
               rootRelationship
-                ?.interactionCount || 0,
+                ?.interactionCount ||
+              0,
           };
 
-          setSecondHop(secondHopResult);
-        } catch (error) {
+          setSecondHop(
+            secondHopResult
+          );
+        } catch (
+          error
+        ) {
           console.error(
             "Second-hop investigation:",
             error
@@ -662,97 +881,129 @@ export default function Home() {
 
       setStatus(
         language === "zh"
-          ? "正在生成 AI 调查报告..."
-          : "Generating AI investigation report..."
+          ? "正在生成变化原因与潜在影响报告..."
+          : "Generating change cause and impact report..."
       );
 
       setAiLoading(true);
 
       const evidenceTransactions =
-        txItems.slice(0, 20).map((tx) => ({
-          hash: tx.hash,
-          from: tx.from,
-          to: tx.to,
+        txItems
+          .slice(0, 20)
+          .map((tx) => ({
+            hash:
+              tx.hash,
 
-          valueEth:
-            formatEth(tx.value),
+            from:
+              tx.from,
 
-          time:
-            formatTime(tx.timeStamp),
+            to:
+              tx.to,
 
-          direction:
-            tx.from?.toLowerCase() ===
-            rootAddress
-              ? "OUT"
-              : "IN",
+            valueEth:
+              formatEth(
+                tx.value
+              ),
 
-          blockNumber:
-            tx.blockNumber,
-        }));
+            time:
+              formatTime(
+                tx.timeStamp
+              ),
+
+            direction:
+              tx.from?.toLowerCase() ===
+              rootAddress
+                ? "OUT"
+                : "IN",
+
+            blockNumber:
+              tx.blockNumber,
+          }));
 
       const evidenceTokens =
-        tokenItems.slice(0, 20).map((tx) => ({
-          hash: tx.hash,
-          from: tx.from,
-          to: tx.to,
+        tokenItems
+          .slice(0, 20)
+          .map((tx) => ({
+            hash:
+              tx.hash,
 
-          direction:
-            tx.from?.toLowerCase() ===
-            rootAddress
-              ? "OUT"
-              : "IN",
+            from:
+              tx.from,
 
-          amount:
-            formatTokenAmount(
-              tx.value,
-              tx.tokenDecimal
-            ),
+            to:
+              tx.to,
 
-          symbol:
-            tx.tokenSymbol ||
-            "TOKEN",
+            direction:
+              tx.from?.toLowerCase() ===
+              rootAddress
+                ? "OUT"
+                : "IN",
 
-          tokenName:
-            tx.tokenName ||
-            "Unknown Token",
+            amount:
+              formatTokenAmount(
+                tx.value,
+                tx.tokenDecimal
+              ),
 
-          contractAddress:
-            tx.contractAddress,
+            symbol:
+              tx.tokenSymbol ||
+              "TOKEN",
 
-          time:
-            formatTime(tx.timeStamp),
+            tokenName:
+              tx.tokenName ||
+              "Unknown Token",
 
-          blockNumber:
-            tx.blockNumber,
-        }));
+            contractAddress:
+              tx.contractAddress,
+
+            time:
+              formatTime(
+                tx.timeStamp
+              ),
+
+            blockNumber:
+              tx.blockNumber,
+          }));
 
       const evidenceInternal =
-        internalItems.slice(0, 20).map((tx) => ({
-          hash: tx.hash,
-          from: tx.from,
-          to: tx.to,
+        internalItems
+          .slice(0, 20)
+          .map((tx) => ({
+            hash:
+              tx.hash,
 
-          direction:
-            tx.from?.toLowerCase() ===
-            rootAddress
-              ? "OUT"
-              : "IN",
+            from:
+              tx.from,
 
-          valueEth:
-            formatEth(tx.value),
+            to:
+              tx.to,
 
-          type:
-            tx.type || "unknown",
+            direction:
+              tx.from?.toLowerCase() ===
+              rootAddress
+                ? "OUT"
+                : "IN",
 
-          time:
-            formatTime(tx.timeStamp),
+            valueEth:
+              formatEth(
+                tx.value
+              ),
 
-          blockNumber:
-            tx.blockNumber,
+            type:
+              tx.type ||
+              "unknown",
 
-          isError:
-            tx.isError,
-        }));
+            time:
+              formatTime(
+                tx.timeStamp
+              ),
+
+            blockNumber:
+              tx.blockNumber,
+
+            isError:
+              tx.isError,
+          }));
 
       const firstHopEvidence =
         firstHopCounterparties
@@ -771,10 +1022,14 @@ export default function Home() {
               item.incomingCount,
 
             ethOut:
-              item.ethOut.toFixed(4),
+              item.ethOut.toFixed(
+                4
+              ),
 
             ethIn:
-              item.ethIn.toFixed(4),
+              item.ethIn.toFixed(
+                4
+              ),
 
             tokenEventCount:
               item.tokenEventCount,
@@ -802,36 +1057,47 @@ export default function Home() {
         secondHopResult
           ? {
               investigatedAddress:
-                secondHopResult.investigatedAddress,
+                secondHopResult
+                  .investigatedAddress,
 
               selectedFromAddress:
                 address,
 
               selectionReason:
-                secondHopResult.selectionReason,
+                secondHopResult
+                  .selectionReason,
 
               transactionCount:
-                secondHopResult.transactionCount,
+                secondHopResult
+                  .transactionCount,
 
               tokenTransferCount:
-                secondHopResult.tokenTransferCount,
+                secondHopResult
+                  .tokenTransferCount,
 
               internalTransactionCount:
-                secondHopResult.internalTransactionCount,
+                secondHopResult
+                  .internalTransactionCount,
 
               totalObservedEvents:
-                secondHopResult.transactionCount +
-                secondHopResult.tokenTransferCount +
-                secondHopResult.internalTransactionCount,
+                secondHopResult
+                  .transactionCount +
+                secondHopResult
+                  .tokenTransferCount +
+                secondHopResult
+                  .internalTransactionCount,
 
               linksBackToRoot:
-                secondHopResult.linksBackToRoot,
+                secondHopResult
+                  .linksBackToRoot,
 
               rootInteractionCount:
-                secondHopResult.rootInteractionCount,
+                secondHopResult
+                  .rootInteractionCount,
 
               topCounterparties:
-                secondHopResult.counterparties
+                secondHopResult
+                  .counterparties
                   .filter(
                     (item) =>
                       item.address.toLowerCase() !==
@@ -852,10 +1118,14 @@ export default function Home() {
                       item.incomingCount,
 
                     ethOut:
-                      item.ethOut.toFixed(4),
+                      item.ethOut.toFixed(
+                        4
+                      ),
 
                     ethIn:
-                      item.ethIn.toFixed(4),
+                      item.ethIn.toFixed(
+                        4
+                      ),
 
                     sources:
                       item.sources,
@@ -871,62 +1141,67 @@ export default function Home() {
           await fetch(
             "/api/investigate",
             {
-              method: "POST",
+              method:
+                "POST",
 
               headers: {
                 "Content-Type":
                   "application/json",
               },
 
-              body: JSON.stringify({
-                address,
+              body:
+                JSON.stringify({
+                  address,
 
-                balance:
-                  formattedBalance,
+                  balance:
+                    formattedBalance,
 
-                riskScore:
-                  score,
+                  riskScore:
+                    score,
 
-                riskLevel,
+                  riskLevel,
 
-                language,
+                  language,
 
-                anomalies:
-                  detected,
+                  anomalies:
+                    detected,
 
-                transactions:
-                  evidenceTransactions,
+                  changeAnalysis:
+                    changeResult,
 
-                tokenTransfers:
-                  evidenceTokens,
+                  transactions:
+                    evidenceTransactions,
 
-                internalTransactions:
-                  evidenceInternal,
+                  tokenTransfers:
+                    evidenceTokens,
 
-                counterparties:
-                  firstHopEvidence,
+                  internalTransactions:
+                    evidenceInternal,
 
-                secondHop:
-                  secondHopEvidence,
+                  counterparties:
+                    firstHopEvidence,
 
-                analyzedTransactionCount:
-                  txItems.length,
+                  secondHop:
+                    secondHopEvidence,
 
-                analyzedTokenTransferCount:
-                  tokenItems.length,
+                  analyzedTransactionCount:
+                    txItems.length,
 
-                analyzedInternalTransactionCount:
-                  internalItems.length,
+                  analyzedTokenTransferCount:
+                    tokenItems.length,
 
-                evidenceTransactionCount:
-                  evidenceTransactions.length,
+                  analyzedInternalTransactionCount:
+                    internalItems.length,
 
-                evidenceTokenTransferCount:
-                  evidenceTokens.length,
+                  evidenceTransactionCount:
+                    evidenceTransactions.length,
 
-                evidenceInternalTransactionCount:
-                  evidenceInternal.length,
-              }),
+                  evidenceTokenTransferCount:
+                    evidenceTokens.length,
+
+                  evidenceInternalTransactionCount:
+                    evidenceInternal.length,
+                }),
             }
           );
 
@@ -941,43 +1216,48 @@ export default function Home() {
         }
 
         setAiReport(
-          aiData.report || ""
+          aiData.report ||
+            ""
         );
-      } catch (error) {
-        console.error(error);
+      } catch (
+        error
+      ) {
+        console.error(
+          error
+        );
 
         setAiReport(
           language === "zh"
             ? `
-## AI 调查报告生成失败
+## AI 报告生成失败
 
-确定性链上分析已经完成，但 AI 报告暂时无法生成。
+程序已经完成变化检测、原因假设和潜在影响分析，但 AI 报告暂时无法生成。
 
-你仍然可以查看总览、Agent 追踪和原始证据。
+你仍然可以查看“变化分析”和“Agent 追踪”。
 `
             : `
 ## AI Report Generation Failed
 
-The deterministic on-chain investigation completed successfully, but the AI report could not be generated.
-
-You can still review the overview, agent trace and raw evidence.
+Deterministic change detection, cause hypotheses and impact analysis completed successfully, but the AI report could not be generated.
 `
         );
       } finally {
-        setAiLoading(false);
+        setAiLoading(
+          false
+        );
       }
 
       setStatus(
         language === "zh"
-          ? secondHopResult
-            ? "调查完成 · Agent 二跳追踪已完成"
-            : "调查完成"
-          : secondHopResult
-          ? "Investigation complete · Second-hop trace completed"
+          ? "调查完成"
           : "Investigation complete"
       );
-    } catch (error) {
-      console.error(error);
+    } catch (
+      error
+    ) {
+      console.error(
+        error
+      );
 
       setStatus(
         error instanceof Error
@@ -987,8 +1267,868 @@ You can still review the overview, agent trace and raw evidence.
           : "Investigation failed."
       );
     } finally {
-      setLoading(false);
+      setLoading(
+        false
+      );
     }
+  }
+
+  function analyzeBehaviorChange(
+    txs: Transaction[],
+    tokens: TokenTransfer[],
+    internals: InternalTransaction[],
+    cps: Counterparty[],
+    root: string
+  ): ChangeAnalysis {
+    const allTimestamps = [
+      ...txs.map(
+        (x) =>
+          Number(
+            x.timeStamp
+          )
+      ),
+
+      ...tokens.map(
+        (x) =>
+          Number(
+            x.timeStamp
+          )
+      ),
+
+      ...internals.map(
+        (x) =>
+          Number(
+            x.timeStamp
+          )
+      ),
+    ].filter(
+      (x) =>
+        Number.isFinite(
+          x
+        ) &&
+        x >
+          0
+    );
+
+    const latest =
+      allTimestamps.length
+        ? Math.max(
+            ...allTimestamps
+          )
+        : Math.floor(
+            Date.now() /
+              1000
+          );
+
+    const WINDOW =
+      24 *
+      60 *
+      60;
+
+    const recentStart =
+      latest -
+      WINDOW;
+
+    const baselineStart =
+      recentStart -
+      WINDOW;
+
+    const recentTx =
+      txs.filter(
+        (x) =>
+          Number(
+            x.timeStamp
+          ) >=
+            recentStart &&
+          Number(
+            x.timeStamp
+          ) <=
+            latest
+      );
+
+    const baselineTx =
+      txs.filter(
+        (x) =>
+          Number(
+            x.timeStamp
+          ) >=
+            baselineStart &&
+          Number(
+            x.timeStamp
+          ) <
+            recentStart
+      );
+
+    const recentTokens =
+      tokens.filter(
+        (x) =>
+          Number(
+            x.timeStamp
+          ) >=
+            recentStart &&
+          Number(
+            x.timeStamp
+          ) <=
+            latest
+      );
+
+    const baselineTokens =
+      tokens.filter(
+        (x) =>
+          Number(
+            x.timeStamp
+          ) >=
+            baselineStart &&
+          Number(
+            x.timeStamp
+          ) <
+            recentStart
+      );
+
+    const recentInternal =
+      internals.filter(
+        (x) =>
+          Number(
+            x.timeStamp
+          ) >=
+            recentStart &&
+          Number(
+            x.timeStamp
+          ) <=
+            latest
+      );
+
+    const baselineInternal =
+      internals.filter(
+        (x) =>
+          Number(
+            x.timeStamp
+          ) >=
+            baselineStart &&
+          Number(
+            x.timeStamp
+          ) <
+            recentStart
+      );
+
+    function ethOutflow(
+      items: Transaction[]
+    ) {
+      return items.reduce(
+        (sum, tx) => {
+          if (
+            tx.from?.toLowerCase() !==
+            root
+          ) {
+            return sum;
+          }
+
+          try {
+            return (
+              sum +
+              Number(
+                ethers.formatEther(
+                  tx.value ||
+                    "0"
+                )
+              )
+            );
+          } catch {
+            return sum;
+          }
+        },
+        0
+      );
+    }
+
+    function internalOutflow(
+      items: InternalTransaction[]
+    ) {
+      return items.reduce(
+        (sum, tx) => {
+          if (
+            tx.from?.toLowerCase() !==
+            root
+          ) {
+            return sum;
+          }
+
+          try {
+            return (
+              sum +
+              Number(
+                ethers.formatEther(
+                  tx.value ||
+                    "0"
+                )
+              )
+            );
+          } catch {
+            return sum;
+          }
+        },
+        0
+      );
+    }
+
+    function concentration(
+      items: Transaction[]
+    ) {
+      const outgoing =
+        items.filter(
+          (x) =>
+            x.from?.toLowerCase() ===
+              root &&
+            x.to
+        );
+
+      if (
+        outgoing.length <
+        2
+      ) {
+        return 0;
+      }
+
+      const map =
+        new Map<
+          string,
+          number
+        >();
+
+      for (
+        const tx of outgoing
+      ) {
+        let amount =
+          0;
+
+        try {
+          amount =
+            Number(
+              ethers.formatEther(
+                tx.value ||
+                  "0"
+              )
+            );
+        } catch {}
+
+        const key =
+          tx.to.toLowerCase();
+
+        map.set(
+          key,
+          (map.get(
+            key
+          ) || 0) +
+            amount
+        );
+      }
+
+      const total =
+        Array.from(
+          map.values()
+        ).reduce(
+          (a, b) =>
+            a + b,
+          0
+        );
+
+      if (
+        total <=
+        0
+      ) {
+        return 0;
+      }
+
+      const top =
+        Math.max(
+          ...Array.from(
+            map.values()
+          )
+        );
+
+      return (
+        top /
+        total
+      );
+    }
+
+    function makeMetric(
+      key: string,
+      labelZh: string,
+      labelEn: string,
+      baseline: number,
+      recent: number,
+      unitZh: string,
+      unitEn: string,
+      explanationZh: string,
+      explanationEn: string
+    ): ChangeMetric {
+      const denominator =
+        Math.max(
+          Math.abs(
+            baseline
+          ),
+          0.000001
+        );
+
+      const ratio =
+        recent /
+        denominator;
+
+      let direction:
+        | "UP"
+        | "DOWN"
+        | "STABLE" =
+        "STABLE";
+
+      if (
+        baseline ===
+          0 &&
+        recent >
+          0
+      ) {
+        direction =
+          "UP";
+      } else if (
+        recent >
+        baseline *
+          1.5
+      ) {
+        direction =
+          "UP";
+      } else if (
+        recent <
+        baseline *
+          0.67
+      ) {
+        direction =
+          "DOWN";
+      }
+
+      const magnitude =
+        baseline ===
+          0
+          ? recent >
+            0
+            ? 999
+            : 1
+          : ratio;
+
+      const important =
+        direction !==
+          "STABLE" &&
+        (
+          recent >=
+            3 ||
+          baseline >=
+            3 ||
+          key.includes(
+            "outflow"
+          ) ||
+          key.includes(
+            "concentration"
+          )
+        );
+
+      return {
+        key,
+        labelZh,
+        labelEn,
+        baseline,
+        recent,
+        unitZh,
+        unitEn,
+        direction,
+        magnitude,
+        important,
+        explanationZh,
+        explanationEn,
+      };
+    }
+
+    const recentEthOut =
+      ethOutflow(
+        recentTx
+      );
+
+    const baselineEthOut =
+      ethOutflow(
+        baselineTx
+      );
+
+    const recentInternalOut =
+      internalOutflow(
+        recentInternal
+      );
+
+    const baselineInternalOut =
+      internalOutflow(
+        baselineInternal
+      );
+
+    const recentConcentration =
+      concentration(
+        recentTx
+      );
+
+    const baselineConcentration =
+      concentration(
+        baselineTx
+      );
+
+    const metrics = [
+      makeMetric(
+        "eth_frequency",
+        "ETH 交易频率",
+        "ETH Transaction Frequency",
+        baselineTx.length,
+        recentTx.length,
+        " 次/24h",
+        " /24h",
+        "近期普通 ETH 交易数量相较前一个 24 小时窗口发生变化。",
+        "Recent normal ETH transaction activity changed compared with the previous 24-hour window."
+      ),
+
+      makeMetric(
+        "eth_outflow",
+        "ETH 转出量",
+        "ETH Outflow",
+        baselineEthOut,
+        recentEthOut,
+        " ETH",
+        " ETH",
+        "近期 ETH 转出规模相较基准窗口发生变化。",
+        "Recent ETH outflow changed compared with the baseline window."
+      ),
+
+      makeMetric(
+        "token_frequency",
+        "ERC-20 活动",
+        "ERC-20 Activity",
+        baselineTokens.length,
+        recentTokens.length,
+        " 次/24h",
+        " /24h",
+        "近期 ERC-20 转账事件数量发生变化。",
+        "Recent ERC-20 transfer activity changed."
+      ),
+
+      makeMetric(
+        "internal_frequency",
+        "Internal 活动",
+        "Internal Activity",
+        baselineInternal.length,
+        recentInternal.length,
+        " 次/24h",
+        " /24h",
+        "智能合约执行产生的内部资金活动数量发生变化。",
+        "Internal transaction activity generated during smart-contract execution changed."
+      ),
+
+      makeMetric(
+        "internal_outflow",
+        "Internal ETH 转出",
+        "Internal ETH Outflow",
+        baselineInternalOut,
+        recentInternalOut,
+        " ETH",
+        " ETH",
+        "Internal Transaction 中的 ETH 转出规模发生变化。",
+        "ETH outflow observed in internal transactions changed."
+      ),
+
+      makeMetric(
+        "concentration",
+        "主要接收方集中度",
+        "Top Recipient Concentration",
+        baselineConcentration *
+          100,
+        recentConcentration *
+          100,
+        "%",
+        "%",
+        "近期普通 ETH 转出是否更加集中到少数地址。",
+        "Measures whether recent ETH outflow became more concentrated among fewer recipients."
+      ),
+    ];
+
+    const importantMetrics =
+      metrics.filter(
+        (x) =>
+          x.important
+      );
+
+    const causes:
+      CauseHypothesis[] =
+      [];
+
+    const frequencyUp =
+      importantMetrics.find(
+        (x) =>
+          x.key ===
+            "eth_frequency" &&
+          x.direction ===
+            "UP"
+      );
+
+    const outflowUp =
+      importantMetrics.find(
+        (x) =>
+          x.key ===
+            "eth_outflow" &&
+          x.direction ===
+            "UP"
+      );
+
+    const tokenUp =
+      importantMetrics.find(
+        (x) =>
+          x.key ===
+            "token_frequency" &&
+          x.direction ===
+            "UP"
+      );
+
+    const internalUp =
+      importantMetrics.find(
+        (x) =>
+          x.key ===
+            "internal_frequency" &&
+          x.direction ===
+            "UP"
+      );
+
+    const concentrationUp =
+      importantMetrics.find(
+        (x) =>
+          x.key ===
+            "concentration" &&
+          x.direction ===
+            "UP"
+      );
+
+    if (
+      outflowUp &&
+      concentrationUp
+    ) {
+      causes.push({
+        id:
+          "fund_consolidation",
+
+        titleZh:
+          "资金归集或资产迁移",
+        titleEn:
+          "Fund Consolidation or Asset Migration",
+
+        confidence:
+          concentrationUp.recent >=
+            70
+            ? "HIGH"
+            : "MEDIUM",
+
+        evidenceZh: [
+          "近期 ETH 转出规模上升",
+          "主要接收方集中度同步上升",
+          "资金更集中地流向少数对手方",
+        ],
+
+        evidenceEn: [
+          "Recent ETH outflow increased",
+          "Top-recipient concentration increased",
+          "Funds became more concentrated among fewer counterparties",
+        ],
+
+        explanationZh:
+          "这种模式与资金归集、钱包迁移或集中管理资金的行为相符，但仅凭链上行为无法确认实际目的。",
+
+        explanationEn:
+          "This pattern is consistent with fund consolidation, wallet migration, or centralized treasury movement, but the actual purpose cannot be confirmed from on-chain behavior alone.",
+      });
+    }
+
+    if (
+      internalUp &&
+      (
+        tokenUp ||
+        frequencyUp
+      )
+    ) {
+      causes.push({
+        id:
+          "automated_contract_activity",
+
+        titleZh:
+          "自动化合约或 DeFi 活动增加",
+        titleEn:
+          "Increased Automated Contract or DeFi Activity",
+
+        confidence:
+          tokenUp &&
+          internalUp
+            ? "HIGH"
+            : "MEDIUM",
+
+        evidenceZh: [
+          "Internal Transaction 活动上升",
+          tokenUp
+            ? "ERC-20 转账活动同步上升"
+            : "普通交易活动同步变化",
+          "多种链上事件在相近时间窗口同时增加",
+        ],
+
+        evidenceEn: [
+          "Internal transaction activity increased",
+          tokenUp
+            ? "ERC-20 transfer activity also increased"
+            : "Normal transaction activity also changed",
+          "Multiple on-chain event types increased in the same time window",
+        ],
+
+        explanationZh:
+          "多个数据源同步活跃通常与智能合约调用、DEX、DeFi 操作或自动化执行有关，但目前系统尚未完成协议语义识别。",
+
+        explanationEn:
+          "Simultaneous activity across multiple sources can be consistent with smart-contract calls, DEX or DeFi interaction, or automated execution. Full protocol semantics are not yet identified.",
+      });
+    }
+
+    if (
+      frequencyUp &&
+      outflowUp
+    ) {
+      causes.push({
+        id:
+          "rapid_distribution",
+
+        titleZh:
+          "批量转账或快速资金分发",
+        titleEn:
+          "Batch Transfer or Rapid Fund Distribution",
+
+        confidence:
+          "MEDIUM",
+
+        evidenceZh: [
+          "短期交易频率上升",
+          "ETH 转出规模同时增加",
+          "资金活动在近期窗口内明显加速",
+        ],
+
+        evidenceEn: [
+          "Short-term transaction frequency increased",
+          "ETH outflow also increased",
+          "Fund movement accelerated in the recent window",
+        ],
+
+        explanationZh:
+          "这种模式可能来自批量支付、资金分发、自动化钱包操作或短期资产调整。当前证据不能区分具体业务目的。",
+
+        explanationEn:
+          "This can be consistent with batch payments, fund distribution, automated wallet operations, or short-term asset reallocation. The exact purpose cannot be determined from current evidence.",
+      });
+    }
+
+    if (
+      causes.length ===
+        0 &&
+      importantMetrics.length >
+        0
+    ) {
+      causes.push({
+        id:
+          "unresolved_external_change",
+
+        titleZh:
+          "未知外部行为变化",
+        titleEn:
+          "Unresolved External Behavioral Change",
+
+        confidence:
+          "LOW",
+
+        evidenceZh:
+          importantMetrics
+            .slice(0, 3)
+            .map(
+              (x) =>
+                `${x.labelZh}发生明显变化`
+            ),
+
+        evidenceEn:
+          importantMetrics
+            .slice(0, 3)
+            .map(
+              (x) =>
+                `${x.labelEn} changed materially`
+            ),
+
+        explanationZh:
+          "程序确认行为发生变化，但当前链上数据不足以可靠判断具体原因，需要进一步结合地址标签、协议语义或更长历史窗口。",
+
+        explanationEn:
+          "The program confirms that behavior changed, but current on-chain evidence is insufficient to reliably determine the cause. Entity labels, protocol semantics or a longer history window would be needed.",
+      });
+    }
+
+    const impacts:
+      ImpactItem[] =
+      [];
+
+    if (outflowUp) {
+      impacts.push({
+        id:
+          "balance_pressure",
+
+        categoryZh:
+          "资金影响",
+        categoryEn:
+          "Financial Impact",
+
+        titleZh:
+          "余额可能进一步下降",
+        titleEn:
+          "Balance May Decline Further",
+
+        descriptionZh:
+          "如果近期高转出行为持续，当前地址的可用 ETH 余额可能继续下降。",
+
+        descriptionEn:
+          "If the elevated outflow continues, the address's available ETH balance may continue to decline.",
+
+        severity:
+          outflowUp.magnitude >=
+            3
+            ? "HIGH"
+            : "MEDIUM",
+      });
+    }
+
+    if (
+      concentrationUp &&
+      concentrationUp.recent >=
+        60
+    ) {
+      impacts.push({
+        id:
+          "concentration_risk",
+
+        categoryZh:
+          "关系影响",
+        categoryEn:
+          "Network Impact",
+
+        titleZh:
+          "资金关系更加集中",
+        titleEn:
+          "Fund Relationships Are Becoming More Concentrated",
+
+        descriptionZh:
+          "更多资金集中到少数地址后，资金路径对少量对手方的依赖上升。",
+
+        descriptionEn:
+          "As more funds concentrate among fewer addresses, the fund-flow network becomes more dependent on a small number of counterparties.",
+
+        severity:
+          concentrationUp.recent >=
+            80
+            ? "HIGH"
+            : "MEDIUM",
+      });
+    }
+
+    if (
+      frequencyUp ||
+      internalUp ||
+      tokenUp
+    ) {
+      impacts.push({
+        id:
+          "behavioral_shift",
+
+        categoryZh:
+          "行为影响",
+        categoryEn:
+          "Behavioral Impact",
+
+        titleZh:
+          "地址行为已经偏离近期基准",
+        titleEn:
+          "Wallet Behavior Has Shifted From Its Recent Baseline",
+
+        descriptionZh:
+          "多个活动指标发生同步变化，说明当前行为模式与前一个基准窗口不同。",
+
+        descriptionEn:
+          "Multiple activity metrics changed at the same time, indicating that the current behavior differs from the previous baseline window.",
+
+        severity:
+          "MEDIUM",
+      });
+    }
+
+    if (
+      cps.length >=
+      5
+    ) {
+      impacts.push({
+        id:
+          "trace_complexity",
+
+        categoryZh:
+          "调查影响",
+        categoryEn:
+          "Investigation Impact",
+
+        titleZh:
+          "资金关系扩散会增加追踪复杂度",
+        titleEn:
+          "Relationship Expansion Increases Tracing Complexity",
+
+        descriptionZh:
+          "当资金经过更多对手方和第二跳地址时，后续资金追踪需要更完整的关系图谱和标签信息。",
+
+        descriptionEn:
+          "As funds propagate through more counterparties and second-hop addresses, tracing requires richer graph and attribution data.",
+
+        severity:
+          cps.length >=
+            15
+            ? "HIGH"
+            : "MEDIUM",
+      });
+    }
+
+    const summaryZh =
+      importantMetrics.length
+        ? `程序在最近 24 小时窗口中识别到 ${importantMetrics.length} 个明显变化指标。最重要的是：${importantMetrics
+            .slice(0, 3)
+            .map(
+              (x) =>
+                x.labelZh
+            )
+            .join("、")}。`
+        : "当前最近 24 小时窗口与前一个基准窗口之间没有检测到明显变化。";
+
+    const summaryEn =
+      importantMetrics.length
+        ? `The program identified ${importantMetrics.length} material change metric(s) in the recent 24-hour window. The most relevant were ${importantMetrics
+            .slice(0, 3)
+            .map(
+              (x) =>
+                x.labelEn
+            )
+            .join(", ")}.`
+        : "No major behavioral change was detected between the recent 24-hour window and the previous baseline window.";
+
+    return {
+      recentStart,
+      baselineStart,
+      metrics,
+      causes,
+      impacts,
+      summaryZh,
+      summaryEn,
+    };
   }
 
   function chooseSecondHopCounterparty(
@@ -1008,12 +2148,16 @@ You can still review the overview, agent trace and raw evidence.
         .map((item) => {
           const score =
             item.interactionCount +
-            item.outgoingCount * 1.5 +
-            item.sources.length * 3 +
+            item.outgoingCount *
+              1.5 +
+            item.sources.length *
+              3 +
             Math.min(
               Math.log10(
-                item.ethOut + 1
-              ) * 2,
+                item.ethOut +
+                  1
+              ) *
+                2,
               8
             );
 
@@ -1024,10 +2168,15 @@ You can still review the overview, agent trace and raw evidence.
         })
         .sort(
           (a, b) =>
-            b.score - a.score
+            b.score -
+            a.score
         );
 
-    return candidates[0]?.item || null;
+    return (
+      candidates[0]
+        ?.item ||
+      null
+    );
   }
 
   function buildCounterparties(
@@ -1038,14 +2187,17 @@ You can still review the overview, agent trace and raw evidence.
   ): Counterparty[] {
     type MutableCounterparty =
       Counterparty & {
-        sourceSet: Set<string>;
-        tokenSet: Set<string>;
+        sourceSet:
+          Set<string>;
+        tokenSet:
+          Set<string>;
       };
 
-    const map = new Map<
-      string,
-      MutableCounterparty
-    >();
+    const map =
+      new Map<
+        string,
+        MutableCounterparty
+      >();
 
     function getItem(
       counterpartyAddress: string
@@ -1053,39 +2205,64 @@ You can still review the overview, agent trace and raw evidence.
       const key =
         counterpartyAddress.toLowerCase();
 
-      if (!map.has(key)) {
-        map.set(key, {
-          address:
-            counterpartyAddress,
+      if (
+        !map.has(
+          key
+        )
+      ) {
+        map.set(
+          key,
+          {
+            address:
+              counterpartyAddress,
 
-          interactionCount: 0,
+            interactionCount:
+              0,
 
-          outgoingCount: 0,
-          incomingCount: 0,
+            outgoingCount:
+              0,
 
-          ethOut: 0,
-          ethIn: 0,
+            incomingCount:
+              0,
 
-          tokenEventCount: 0,
-          internalEventCount: 0,
+            ethOut:
+              0,
 
-          sources: [],
-          tokenSymbols: [],
+            ethIn:
+              0,
 
-          lastTimestamp: 0,
+            tokenEventCount:
+              0,
 
-          sourceSet:
-            new Set<string>(),
+            internalEventCount:
+              0,
 
-          tokenSet:
-            new Set<string>(),
-        });
+            sources:
+              [],
+
+            tokenSymbols:
+              [],
+
+            lastTimestamp:
+              0,
+
+            sourceSet:
+              new Set<string>(),
+
+            tokenSet:
+              new Set<string>(),
+          }
+        );
       }
 
-      return map.get(key)!;
+      return map.get(
+        key
+      )!;
     }
 
-    for (const tx of txs) {
+    for (
+      const tx of txs
+    ) {
       const from =
         tx.from?.toLowerCase();
 
@@ -1098,7 +2275,10 @@ You can still review the overview, agent trace and raw evidence.
       const incoming =
         to === target;
 
-      if (!outgoing && !incoming) {
+      if (
+        !outgoing &&
+        !incoming
+      ) {
         continue;
       }
 
@@ -1107,38 +2287,58 @@ You can still review the overview, agent trace and raw evidence.
           ? tx.to
           : tx.from;
 
-      if (!counterparty) {
+      if (
+        !counterparty
+      ) {
         continue;
       }
 
       const item =
-        getItem(counterparty);
+        getItem(
+          counterparty
+        );
 
       item.interactionCount++;
 
-      item.sourceSet.add("ETH");
+      item.sourceSet.add(
+        "ETH"
+      );
 
       item.lastTimestamp =
         Math.max(
           item.lastTimestamp,
-          Number(tx.timeStamp)
+          Number(
+            tx.timeStamp
+          )
         );
 
-      const amount =
-        Number(
-          formatEth(tx.value)
-        );
+      let amount =
+        0;
+
+      try {
+        amount =
+          Number(
+            ethers.formatEther(
+              tx.value ||
+                "0"
+            )
+          );
+      } catch {}
 
       if (outgoing) {
         item.outgoingCount++;
-        item.ethOut += amount;
+        item.ethOut +=
+          amount;
       } else {
         item.incomingCount++;
-        item.ethIn += amount;
+        item.ethIn +=
+          amount;
       }
     }
 
-    for (const tx of tokens) {
+    for (
+      const tx of tokens
+    ) {
       const from =
         tx.from?.toLowerCase();
 
@@ -1151,7 +2351,10 @@ You can still review the overview, agent trace and raw evidence.
       const incoming =
         to === target;
 
-      if (!outgoing && !incoming) {
+      if (
+        !outgoing &&
+        !incoming
+      ) {
         continue;
       }
 
@@ -1160,19 +2363,27 @@ You can still review the overview, agent trace and raw evidence.
           ? tx.to
           : tx.from;
 
-      if (!counterparty) {
+      if (
+        !counterparty
+      ) {
         continue;
       }
 
       const item =
-        getItem(counterparty);
+        getItem(
+          counterparty
+        );
 
       item.interactionCount++;
       item.tokenEventCount++;
 
-      item.sourceSet.add("ERC-20");
+      item.sourceSet.add(
+        "ERC-20"
+      );
 
-      if (tx.tokenSymbol) {
+      if (
+        tx.tokenSymbol
+      ) {
         item.tokenSet.add(
           tx.tokenSymbol
         );
@@ -1181,7 +2392,9 @@ You can still review the overview, agent trace and raw evidence.
       item.lastTimestamp =
         Math.max(
           item.lastTimestamp,
-          Number(tx.timeStamp)
+          Number(
+            tx.timeStamp
+          )
         );
 
       if (outgoing) {
@@ -1191,7 +2404,9 @@ You can still review the overview, agent trace and raw evidence.
       }
     }
 
-    for (const tx of internals) {
+    for (
+      const tx of internals
+    ) {
       const from =
         tx.from?.toLowerCase();
 
@@ -1204,7 +2419,10 @@ You can still review the overview, agent trace and raw evidence.
       const incoming =
         to === target;
 
-      if (!outgoing && !incoming) {
+      if (
+        !outgoing &&
+        !incoming
+      ) {
         continue;
       }
 
@@ -1213,79 +2431,102 @@ You can still review the overview, agent trace and raw evidence.
           ? tx.to
           : tx.from;
 
-      if (!counterparty) {
+      if (
+        !counterparty
+      ) {
         continue;
       }
 
       const item =
-        getItem(counterparty);
+        getItem(
+          counterparty
+        );
 
       item.interactionCount++;
       item.internalEventCount++;
 
-      item.sourceSet.add("Internal");
+      item.sourceSet.add(
+        "Internal"
+      );
 
       item.lastTimestamp =
         Math.max(
           item.lastTimestamp,
-          Number(tx.timeStamp)
+          Number(
+            tx.timeStamp
+          )
         );
 
-      const amount =
-        Number(
-          formatEth(tx.value)
-        );
+      let amount =
+        0;
+
+      try {
+        amount =
+          Number(
+            ethers.formatEther(
+              tx.value ||
+                "0"
+            )
+          );
+      } catch {}
 
       if (outgoing) {
         item.outgoingCount++;
-        item.ethOut += amount;
+        item.ethOut +=
+          amount;
       } else {
         item.incomingCount++;
-        item.ethIn += amount;
+        item.ethIn +=
+          amount;
       }
     }
 
     return Array.from(
       map.values()
     )
-      .map((item) => ({
-        address:
-          item.address,
+      .map(
+        (item) => ({
+          address:
+            item.address,
 
-        interactionCount:
-          item.interactionCount,
+          interactionCount:
+            item.interactionCount,
 
-        outgoingCount:
-          item.outgoingCount,
+          outgoingCount:
+            item.outgoingCount,
 
-        incomingCount:
-          item.incomingCount,
+          incomingCount:
+            item.incomingCount,
 
-        ethOut:
-          item.ethOut,
+          ethOut:
+            item.ethOut,
 
-        ethIn:
-          item.ethIn,
+          ethIn:
+            item.ethIn,
 
-        tokenEventCount:
-          item.tokenEventCount,
+          tokenEventCount:
+            item.tokenEventCount,
 
-        internalEventCount:
-          item.internalEventCount,
+          internalEventCount:
+            item.internalEventCount,
 
-        sources:
-          Array.from(
-            item.sourceSet
-          ),
+          sources:
+            Array.from(
+              item.sourceSet
+            ),
 
-        tokenSymbols:
-          Array.from(
-            item.tokenSet
-          ).slice(0, 8),
+          tokenSymbols:
+            Array.from(
+              item.tokenSet
+            ).slice(
+              0,
+              8
+            ),
 
-        lastTimestamp:
-          item.lastTimestamp,
-      }))
+          lastTimestamp:
+            item.lastTimestamp,
+        })
+      )
       .sort(
         (a, b) =>
           b.interactionCount -
@@ -1296,21 +2537,31 @@ You can still review the overview, agent trace and raw evidence.
   function detectCounterpartyAnomalies(
     items: Counterparty[]
   ): Anomaly[] {
-    const results: Anomaly[] = [];
+    const results:
+      Anomaly[] =
+      [];
 
-    if (!items.length) {
+    if (
+      !items.length
+    ) {
       return results;
     }
 
     const outgoingTotal =
       items.reduce(
-        (sum, item) =>
+        (
+          sum,
+          item
+        ) =>
           sum +
           item.outgoingCount,
         0
       );
 
-    if (outgoingTotal >= 5) {
+    if (
+      outgoingTotal >=
+      5
+    ) {
       const top =
         [...items].sort(
           (a, b) =>
@@ -1323,68 +2574,47 @@ You can still review the overview, agent trace and raw evidence.
         outgoingTotal;
 
       if (
-        top.outgoingCount >= 4 &&
-        ratio >= 0.7
+        top.outgoingCount >=
+          4 &&
+        ratio >=
+          0.7
       ) {
         results.push({
           type:
-            language === "zh"
+            language ===
+            "zh"
               ? "对手方高度集中"
               : "Counterparty Concentration",
 
           severity:
-            ratio >= 0.85
+            ratio >=
+            0.85
               ? "HIGH"
               : "MEDIUM",
 
           description:
-            language === "zh"
+            language ===
+            "zh"
               ? `${(
-                  ratio * 100
+                  ratio *
+                  100
                 ).toFixed(
                   1
                 )}% 的样本转出交互集中于同一个对手方。`
               : `${(
-                  ratio * 100
+                  ratio *
+                  100
                 ).toFixed(
                   1
                 )}% of sampled outgoing interactions involve one counterparty.`,
 
           score:
-            ratio >= 0.85
+            ratio >=
+            0.85
               ? 12
               : 7,
         });
       }
-    }
-
-    const multisource =
-      items.find(
-        (item) =>
-          item.sources.length >= 3 &&
-          item.interactionCount >= 5
-      );
-
-    if (multisource) {
-      results.push({
-        type:
-          language === "zh"
-            ? "多来源重复对手方"
-            : "Multi-source Counterparty",
-
-        severity: "MEDIUM",
-
-        description:
-          language === "zh"
-            ? `${shorten(
-                multisource.address
-              )} 同时出现在 ETH、ERC-20 与 Internal 活动中。`
-            : `${shorten(
-                multisource.address
-              )} appears across ETH, ERC-20 and Internal activity.`,
-
-        score: 6,
-      });
     }
 
     return results;
@@ -1394,9 +2624,13 @@ You can still review the overview, agent trace and raw evidence.
     txs: Transaction[],
     targetAddress: string
   ): Anomaly[] {
-    const results: Anomaly[] = [];
+    const results:
+      Anomaly[] =
+      [];
 
-    if (!txs.length) {
+    if (
+      !txs.length
+    ) {
       return results;
     }
 
@@ -1405,35 +2639,41 @@ You can still review the overview, agent trace and raw evidence.
 
     const parsed =
       txs
-        .map((tx) => {
-          let ethValue = 0;
+        .map(
+          (tx) => {
+            let ethValue =
+              0;
 
-          try {
-            ethValue =
-              Number(
-                ethers.formatEther(
-                  tx.value || "0"
-                )
-              );
-          } catch {}
+            try {
+              ethValue =
+                Number(
+                  ethers.formatEther(
+                    tx.value ||
+                      "0"
+                  )
+                );
+            } catch {}
 
-          return {
-            ...tx,
+            return {
+              ...tx,
 
-            ethValue,
+              ethValue,
 
-            timestamp:
-              Number(tx.timeStamp),
+              timestamp:
+                Number(
+                  tx.timeStamp
+                ),
 
-            isOutgoing:
-              tx.from?.toLowerCase() ===
-              target,
+              isOutgoing:
+                tx.from?.toLowerCase() ===
+                target,
 
-            isIncoming:
-              tx.to?.toLowerCase() ===
-              target,
-          };
-        })
+              isIncoming:
+                tx.to?.toLowerCase() ===
+                target,
+            };
+          }
+        )
         .sort(
           (a, b) =>
             a.timestamp -
@@ -1444,20 +2684,25 @@ You can still review the overview, agent trace and raw evidence.
       parsed.filter(
         (tx) =>
           tx.isOutgoing &&
-          tx.ethValue > 0
+          tx.ethValue >
+            0
       );
 
     const incoming =
       parsed.filter(
         (tx) =>
           tx.isIncoming &&
-          tx.ethValue > 0
+          tx.ethValue >
+            0
       );
 
     const avgOutgoing =
       outgoing.length
         ? outgoing.reduce(
-            (sum, tx) =>
+            (
+              sum,
+              tx
+            ) =>
               sum +
               tx.ethValue,
             0
@@ -1468,13 +2713,18 @@ You can still review the overview, agent trace and raw evidence.
     const large =
       outgoing.filter(
         (tx) =>
-          avgOutgoing > 0 &&
+          avgOutgoing >
+            0 &&
           tx.ethValue >=
-            avgOutgoing * 3 &&
-          tx.ethValue >= 0.1
+            avgOutgoing *
+              3 &&
+          tx.ethValue >=
+            0.1
       );
 
-    if (large.length) {
+    if (
+      large.length
+    ) {
       const biggest =
         large.reduce(
           (a, b) =>
@@ -1486,11 +2736,13 @@ You can still review the overview, agent trace and raw evidence.
 
       const high =
         biggest.ethValue >=
-        avgOutgoing * 8;
+        avgOutgoing *
+          8;
 
       results.push({
         type:
-          language === "zh"
+          language ===
+          "zh"
             ? "ETH 大额转出"
             : "Large ETH Transfer",
 
@@ -1500,10 +2752,11 @@ You can still review the overview, agent trace and raw evidence.
             : "MEDIUM",
 
         description:
-          language === "zh"
+          language ===
+          "zh"
             ? `${biggest.ethValue.toFixed(
                 4
-              )} ETH 的转账显著高于近期平均转出 ${avgOutgoing.toFixed(
+              )} ETH 显著高于近期平均转出 ${avgOutgoing.toFixed(
                 4
               )} ETH。`
             : `${biggest.ethValue.toFixed(
@@ -1513,31 +2766,41 @@ You can still review the overview, agent trace and raw evidence.
               )} ETH.`,
 
         score:
-          high ? 18 : 10,
+          high
+            ? 18
+            : 10,
 
         evidenceHash:
           biggest.hash,
       });
     }
 
-    let max10m = 0;
-    let frequencyHash = "";
+    let max10m =
+      0;
+
+    let evidenceHash =
+      "";
 
     for (
       let i = 0;
-      i < parsed.length;
+      i <
+      parsed.length;
       i++
     ) {
-      let count = 0;
+      let count =
+        0;
 
       for (
         let j = i;
-        j < parsed.length;
+        j <
+        parsed.length;
         j++
       ) {
         if (
-          parsed[j].timestamp -
-            parsed[i].timestamp <=
+          parsed[j]
+            .timestamp -
+            parsed[i]
+              .timestamp <=
           600
         ) {
           count++;
@@ -1546,78 +2809,106 @@ You can still review the overview, agent trace and raw evidence.
         }
       }
 
-      if (count > max10m) {
-        max10m = count;
-        frequencyHash =
-          parsed[i].hash;
+      if (
+        count >
+        max10m
+      ) {
+        max10m =
+          count;
+
+        evidenceHash =
+          parsed[i]
+            .hash;
       }
     }
 
-    if (max10m >= 8) {
+    if (
+      max10m >=
+      8
+    ) {
       results.push({
         type:
-          language === "zh"
+          language ===
+          "zh"
             ? "ETH 交易频率突增"
             : "ETH Transaction Frequency Spike",
 
         severity:
-          max10m >= 15
+          max10m >=
+          15
             ? "HIGH"
             : "MEDIUM",
 
         description:
-          language === "zh"
+          language ===
+          "zh"
             ? `10 分钟内观察到 ${max10m} 次普通 Ethereum 交易。`
             : `${max10m} normal Ethereum transactions occurred within a 10-minute window.`,
 
         score:
-          max10m >= 15
+          max10m >=
+          15
             ? 14
             : 8,
 
-        evidenceHash:
-          frequencyHash,
+        evidenceHash,
       });
     }
 
-    for (const received of incoming) {
-      let outgoingSoon = 0;
-      let evidenceHash = "";
+    for (
+      const received of incoming
+    ) {
+      let outgoingSoon =
+        0;
 
-      for (const sent of outgoing) {
+      let rapidHash =
+        "";
+
+      for (
+        const sent of outgoing
+      ) {
         const delay =
           sent.timestamp -
           received.timestamp;
 
         if (
-          delay >= 0 &&
-          delay <= 1800
+          delay >=
+            0 &&
+          delay <=
+            1800
         ) {
           outgoingSoon +=
             sent.ethValue;
 
-          if (!evidenceHash) {
-            evidenceHash =
+          if (
+            !rapidHash
+          ) {
+            rapidHash =
               sent.hash;
           }
         }
       }
 
       if (
-        received.ethValue >= 0.1 &&
+        received.ethValue >=
+          0.1 &&
         outgoingSoon >=
-          received.ethValue * 0.7
+          received.ethValue *
+            0.7
       ) {
         results.push({
           type:
-            language === "zh"
+            language ===
+            "zh"
               ? "ETH 快速流出"
               : "Rapid ETH Outflow",
 
-          severity: "HIGH",
+          severity:
+            "HIGH",
 
           description:
-            language === "zh"
+            language ===
+            "zh"
               ? `收到 ${received.ethValue.toFixed(
                   4
                 )} ETH 后，30 分钟内约有 ${outgoingSoon.toFixed(
@@ -1629,9 +2920,11 @@ You can still review the overview, agent trace and raw evidence.
                   4
                 )} ETH was sent out within 30 minutes.`,
 
-          score: 18,
+          score:
+            18,
 
-          evidenceHash,
+          evidenceHash:
+            rapidHash,
         });
 
         break;
@@ -1645,154 +2938,60 @@ You can still review the overview, agent trace and raw evidence.
     transfers: TokenTransfer[],
     targetAddress: string
   ): Anomaly[] {
-    const results: Anomaly[] = [];
+    const results:
+      Anomaly[] =
+      [];
 
-    if (!transfers.length) {
+    if (
+      !transfers.length
+    ) {
       return results;
     }
 
-    const target =
-      targetAddress.toLowerCase();
-
     const parsed =
       transfers
-        .map((tx) => ({
-          ...tx,
+        .map(
+          (tx) => ({
+            ...tx,
 
-          amount:
-            Number(
-              formatTokenAmount(
-                tx.value,
-                tx.tokenDecimal
-              )
-            ),
-
-          timestamp:
-            Number(tx.timeStamp),
-
-          isOutgoing:
-            tx.from?.toLowerCase() ===
-            target,
-        }))
+            timestamp:
+              Number(
+                tx.timeStamp
+              ),
+          })
+        )
         .sort(
           (a, b) =>
             a.timestamp -
             b.timestamp
         );
 
-    const outgoing =
-      parsed.filter(
-        (tx) =>
-          tx.isOutgoing &&
-          tx.amount > 0
-      );
+    let max10m =
+      0;
 
-    const byToken =
-      new Map<
-        string,
-        typeof outgoing
-      >();
-
-    for (const tx of outgoing) {
-      const key =
-        tx.contractAddress
-          ?.toLowerCase() ||
-        tx.tokenSymbol;
-
-      const group =
-        byToken.get(key) || [];
-
-      group.push(tx);
-
-      byToken.set(
-        key,
-        group
-      );
-    }
-
-    for (
-      const [, group]
-      of byToken
-    ) {
-      if (group.length < 3) {
-        continue;
-      }
-
-      const average =
-        group.reduce(
-          (sum, tx) =>
-            sum + tx.amount,
-          0
-        ) /
-        group.length;
-
-      const biggest =
-        group.reduce(
-          (a, b) =>
-            a.amount >
-            b.amount
-              ? a
-              : b
-        );
-
-      if (
-        average > 0 &&
-        biggest.amount >=
-          average * 3
-      ) {
-        const high =
-          biggest.amount >=
-          average * 8;
-
-        results.push({
-          type:
-            language === "zh"
-              ? "ERC-20 大额转账"
-              : "Large ERC-20 Transfer",
-
-          severity:
-            high
-              ? "HIGH"
-              : "MEDIUM",
-
-          description:
-            language === "zh"
-              ? `${biggest.amount.toLocaleString()} ${
-                  biggest.tokenSymbol
-                } 显著高于该 Token 近期样本平均转账金额。`
-              : `${biggest.amount.toLocaleString()} ${
-                  biggest.tokenSymbol
-                } was significantly larger than the recent sample average for this token.`,
-
-          score:
-            high ? 16 : 9,
-
-          evidenceHash:
-            biggest.hash,
-        });
-
-        break;
-      }
-    }
-
-    let max10m = 0;
-    let evidenceHash = "";
+    let evidenceHash =
+      "";
 
     for (
       let i = 0;
-      i < parsed.length;
+      i <
+      parsed.length;
       i++
     ) {
-      let count = 0;
+      let count =
+        0;
 
       for (
         let j = i;
-        j < parsed.length;
+        j <
+        parsed.length;
         j++
       ) {
         if (
-          parsed[j].timestamp -
-            parsed[i].timestamp <=
+          parsed[j]
+            .timestamp -
+            parsed[i]
+              .timestamp <=
           600
         ) {
           count++;
@@ -1801,32 +3000,45 @@ You can still review the overview, agent trace and raw evidence.
         }
       }
 
-      if (count > max10m) {
-        max10m = count;
+      if (
+        count >
+        max10m
+      ) {
+        max10m =
+          count;
+
         evidenceHash =
-          parsed[i].hash;
+          parsed[i]
+            .hash;
       }
     }
 
-    if (max10m >= 8) {
+    if (
+      max10m >=
+      8
+    ) {
       results.push({
         type:
-          language === "zh"
+          language ===
+          "zh"
             ? "ERC-20 活动突增"
             : "ERC-20 Activity Spike",
 
         severity:
-          max10m >= 15
+          max10m >=
+          15
             ? "HIGH"
             : "MEDIUM",
 
         description:
-          language === "zh"
+          language ===
+          "zh"
             ? `10 分钟内观察到 ${max10m} 次 ERC-20 转账事件。`
             : `${max10m} ERC-20 transfer events occurred within a 10-minute window.`,
 
         score:
-          max10m >= 15
+          max10m >=
+          15
             ? 14
             : 8,
 
@@ -1841,135 +3053,60 @@ You can still review the overview, agent trace and raw evidence.
     items: InternalTransaction[],
     targetAddress: string
   ): Anomaly[] {
-    const results: Anomaly[] = [];
+    const results:
+      Anomaly[] =
+      [];
 
-    if (!items.length) {
+    if (
+      !items.length
+    ) {
       return results;
     }
 
-    const target =
-      targetAddress.toLowerCase();
-
     const parsed =
       items
-        .map((tx) => ({
-          ...tx,
+        .map(
+          (tx) => ({
+            ...tx,
 
-          ethValue:
-            Number(
-              formatEth(tx.value)
-            ),
-
-          timestamp:
-            Number(tx.timeStamp),
-
-          isOutgoing:
-            tx.from?.toLowerCase() ===
-            target,
-
-          isIncoming:
-            tx.to?.toLowerCase() ===
-            target,
-        }))
+            timestamp:
+              Number(
+                tx.timeStamp
+              ),
+          })
+        )
         .sort(
           (a, b) =>
             a.timestamp -
             b.timestamp
         );
 
-    const outgoing =
-      parsed.filter(
-        (tx) =>
-          tx.isOutgoing &&
-          tx.ethValue > 0
-      );
+    let max10m =
+      0;
 
-    const incoming =
-      parsed.filter(
-        (tx) =>
-          tx.isIncoming &&
-          tx.ethValue > 0
-      );
-
-    const average =
-      outgoing.length
-        ? outgoing.reduce(
-            (sum, tx) =>
-              sum +
-              tx.ethValue,
-            0
-          ) /
-          outgoing.length
-        : 0;
-
-    if (
-      outgoing.length >= 3 &&
-      average > 0
-    ) {
-      const biggest =
-        outgoing.reduce(
-          (a, b) =>
-            a.ethValue >
-            b.ethValue
-              ? a
-              : b
-        );
-
-      if (
-        biggest.ethValue >=
-        average * 3
-      ) {
-        const high =
-          biggest.ethValue >=
-          average * 8;
-
-        results.push({
-          type:
-            language === "zh"
-              ? "Internal 大额 ETH 转账"
-              : "Large Internal ETH Transfer",
-
-          severity:
-            high
-              ? "HIGH"
-              : "MEDIUM",
-
-          description:
-            language === "zh"
-              ? `一笔 ${biggest.ethValue.toFixed(
-                  4
-                )} ETH 的内部转账显著高于近期内部转出平均水平。`
-              : `An internal transfer of ${biggest.ethValue.toFixed(
-                  4
-                )} ETH was significantly larger than the recent internal average.`,
-
-          score:
-            high ? 16 : 9,
-
-          evidenceHash:
-            biggest.hash,
-        });
-      }
-    }
-
-    let max10m = 0;
-    let evidenceHash = "";
+    let evidenceHash =
+      "";
 
     for (
       let i = 0;
-      i < parsed.length;
+      i <
+      parsed.length;
       i++
     ) {
-      let count = 0;
+      let count =
+        0;
 
       for (
         let j = i;
-        j < parsed.length;
+        j <
+        parsed.length;
         j++
       ) {
         if (
-          parsed[j].timestamp -
-            parsed[i].timestamp <=
+          parsed[j]
+            .timestamp -
+            parsed[i]
+              .timestamp <=
           600
         ) {
           count++;
@@ -1978,96 +3115,50 @@ You can still review the overview, agent trace and raw evidence.
         }
       }
 
-      if (count > max10m) {
-        max10m = count;
+      if (
+        count >
+        max10m
+      ) {
+        max10m =
+          count;
 
         evidenceHash =
-          parsed[i].hash;
+          parsed[i]
+            .hash;
       }
     }
 
-    if (max10m >= 8) {
+    if (
+      max10m >=
+      8
+    ) {
       results.push({
         type:
-          language === "zh"
+          language ===
+          "zh"
             ? "Internal 活动突增"
             : "Internal Transaction Activity Spike",
 
         severity:
-          max10m >= 15
+          max10m >=
+          15
             ? "HIGH"
             : "MEDIUM",
 
         description:
-          language === "zh"
-            ? `10 分钟内观察到 ${max10m} 次 Internal Transaction 事件。`
+          language ===
+          "zh"
+            ? `10 分钟内观察到 ${max10m} 次 Internal Transaction。`
             : `${max10m} internal transaction events occurred within a 10-minute window.`,
 
         score:
-          max10m >= 15
+          max10m >=
+          15
             ? 14
             : 8,
 
         evidenceHash,
       });
-    }
-
-    for (const received of incoming) {
-      let sentSoon = 0;
-      let evidenceHash = "";
-
-      for (const sent of outgoing) {
-        const delay =
-          sent.timestamp -
-          received.timestamp;
-
-        if (
-          delay >= 0 &&
-          delay <= 1800
-        ) {
-          sentSoon +=
-            sent.ethValue;
-
-          if (!evidenceHash) {
-            evidenceHash =
-              sent.hash;
-          }
-        }
-      }
-
-      if (
-        received.ethValue >= 0.1 &&
-        sentSoon >=
-          received.ethValue * 0.7
-      ) {
-        results.push({
-          type:
-            language === "zh"
-              ? "Internal 资金快速流出"
-              : "Rapid Internal Fund Outflow",
-
-          severity: "HIGH",
-
-          description:
-            language === "zh"
-              ? `内部收到 ${received.ethValue.toFixed(
-                  4
-                )} ETH 后，30 分钟内约有 ${sentSoon.toFixed(
-                  4
-                )} ETH 再次流出。`
-              : `After receiving ${received.ethValue.toFixed(
-                  4
-                )} ETH internally, approximately ${sentSoon.toFixed(
-                  4
-                )} ETH was transferred out within 30 minutes.`,
-
-          score: 18,
-
-          evidenceHash,
-        });
-
-        break;
-      }
     }
 
     return results;
@@ -2078,8 +3169,12 @@ You can still review the overview, agent trace and raw evidence.
   ) {
     return Math.min(
       items.reduce(
-        (sum, item) =>
-          sum + item.score,
+        (
+          sum,
+          item
+        ) =>
+          sum +
+          item.score,
         0
       ),
       100
@@ -2093,12 +3188,16 @@ You can still review the overview, agent trace and raw evidence.
     try {
       return Number(
         ethers.formatUnits(
-          value || "0",
+          value ||
+            "0",
           Number(
-            decimals || "18"
+            decimals ||
+              "18"
           )
         )
-      ).toFixed(4);
+      ).toFixed(
+        4
+      );
     } catch {
       return "0.0000";
     }
@@ -2110,9 +3209,12 @@ You can still review the overview, agent trace and raw evidence.
     try {
       return Number(
         ethers.formatEther(
-          value || "0"
+          value ||
+            "0"
         )
-      ).toFixed(4);
+      ).toFixed(
+        4
+      );
     } catch {
       return "0.0000";
     }
@@ -2122,120 +3224,94 @@ You can still review the overview, agent trace and raw evidence.
     timestamp: string
   ) {
     return new Date(
-      Number(timestamp) * 1000
+      Number(
+        timestamp
+      ) *
+        1000
     ).toLocaleString(
-      language === "zh"
+      language ===
+        "zh"
         ? "zh-CN"
         : "en-US"
     );
   }
 
-  function shorten(
-    value: string
-  ) {
-    if (!value) {
-      return "N/A";
-    }
-
-    if (value.length <= 16) {
-      return value;
-    }
-
-    return `${value.slice(
-      0,
-      8
-    )}...${value.slice(-6)}`;
-  }
-
   function getRiskLevel(
     score: number | null
   ) {
-    if (score === null) {
+    if (
+      score ===
+      null
+    ) {
       return {
         label:
-          language === "zh"
+          language ===
+          "zh"
             ? "等待"
             : "WAITING",
 
         className:
           "text-slate-400",
-
-        bg:
-          "bg-slate-500/10",
-
-        border:
-          "border-slate-700",
       };
     }
 
-    if (score >= 80) {
+    if (
+      score >=
+      80
+    ) {
       return {
         label:
-          language === "zh"
+          language ===
+          "zh"
             ? "严重"
             : "CRITICAL",
 
         className:
           "text-red-400",
-
-        bg:
-          "bg-red-500/10",
-
-        border:
-          "border-red-500/30",
       };
     }
 
-    if (score >= 60) {
+    if (
+      score >=
+      60
+    ) {
       return {
         label:
-          language === "zh"
+          language ===
+          "zh"
             ? "高风险"
             : "HIGH",
 
         className:
           "text-orange-400",
-
-        bg:
-          "bg-orange-500/10",
-
-        border:
-          "border-orange-500/30",
       };
     }
 
-    if (score >= 30) {
+    if (
+      score >=
+      30
+    ) {
       return {
         label:
-          language === "zh"
+          language ===
+          "zh"
             ? "中风险"
             : "MEDIUM",
 
         className:
-          "text-yellow-400",
-
-        bg:
-          "bg-yellow-500/10",
-
-        border:
-          "border-yellow-500/30",
+          "text-amber-400",
       };
     }
 
     return {
       label:
-        language === "zh"
+        language ===
+        "zh"
           ? "低风险"
           : "LOW",
 
       className:
         "text-emerald-400",
-
-      bg:
-        "bg-emerald-500/10",
-
-      border:
-        "border-emerald-500/30",
     };
   }
 
@@ -2245,7 +3321,10 @@ You can still review the overview, agent trace and raw evidence.
         getRiskLevel(
           riskScore
         ),
-      [riskScore, language]
+      [
+        riskScore,
+        language,
+      ]
     );
 
   const totalEvents =
@@ -2253,27 +3332,22 @@ You can still review the overview, agent trace and raw evidence.
     tokenTransfers.length +
     internalTransactions.length;
 
-  const hasResults =
-    riskScore !== null;
+  const importantChanges =
+    changeAnalysis?.metrics.filter(
+      (x) =>
+        x.important
+    ) ||
+    [];
 
-  const selectedFirstHop =
-    secondHop
-      ? counterparties.find(
-          (item) =>
-            item.address.toLowerCase() ===
-            secondHop.investigatedAddress.toLowerCase()
-        )
-      : null;
+  const hasResults =
+    riskScore !==
+    null;
 
   return (
     <main className="min-h-screen bg-[#08111d] text-white">
 
       <div className="pointer-events-none fixed inset-0 overflow-hidden">
-
-        <div className="absolute left-1/2 top-[-220px] h-[500px] w-[700px] -translate-x-1/2 rounded-full bg-cyan-500/[0.07] blur-[120px]" />
-
-        <div className="absolute bottom-[-250px] right-[-150px] h-[500px] w-[500px] rounded-full bg-blue-500/[0.05] blur-[120px]" />
-
+        <div className="absolute left-1/2 top-[-250px] h-[550px] w-[800px] -translate-x-1/2 rounded-full bg-cyan-500/[0.06] blur-[130px]" />
       </div>
 
       <div className="relative mx-auto max-w-7xl px-5 py-7 md:px-8">
@@ -2282,70 +3356,76 @@ You can still review the overview, agent trace and raw evidence.
 
           <div className="flex items-center gap-3">
 
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-cyan-400/30 bg-cyan-400/10 text-lg font-bold text-cyan-300">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-cyan-400/20 bg-cyan-400/[0.08] font-semibold text-cyan-300">
               C
             </div>
 
             <div>
-
-              <div className="font-semibold tracking-tight">
+              <div className="font-semibold">
                 ChainScope AI
               </div>
 
-              <div className="mt-0.5 text-xs text-slate-500">
+              <div className="text-xs text-slate-500">
                 {t.subtitle}
               </div>
-
             </div>
 
           </div>
 
           <div className="flex items-center gap-3">
 
-            <div className="hidden rounded-full border border-white/[0.08] bg-white/[0.03] px-3 py-2 text-xs text-slate-400 sm:block">
+            <div className="hidden text-xs text-slate-500 md:block">
               {t.network}
             </div>
 
             <LanguageSwitch
-              language={language}
-              onChange={updateLanguage}
+              language={
+                language
+              }
+              onChange={
+                updateLanguage
+              }
             />
 
           </div>
 
         </header>
 
-        <section className="pb-12 pt-20 text-center md:pb-16 md:pt-28">
+        <section className="pb-12 pt-20 text-center md:pt-28">
 
-          <div className="text-xs font-medium uppercase tracking-[0.28em] text-cyan-400">
+          <div className="text-xs uppercase tracking-[0.28em] text-cyan-400">
             {t.heroEyebrow}
           </div>
 
           <h1 className="mx-auto mt-5 max-w-4xl text-4xl font-semibold tracking-[-0.04em] md:text-6xl">
-
             {t.heroTitle1}
-
             <span className="block text-slate-400">
               {t.heroTitle2}
             </span>
-
           </h1>
 
           <p className="mx-auto mt-6 max-w-2xl text-sm leading-7 text-slate-400 md:text-base">
             {t.heroDescription}
           </p>
 
-          <div className="mx-auto mt-9 flex max-w-3xl flex-col gap-2 rounded-2xl border border-white/[0.08] bg-white/[0.035] p-2 shadow-2xl shadow-black/20 backdrop-blur md:flex-row">
+          <div className="mx-auto mt-9 flex max-w-3xl flex-col gap-2 rounded-2xl border border-white/[0.08] bg-white/[0.03] p-2 md:flex-row">
 
             <input
-              value={address}
-              onChange={(e) =>
+              value={
+                address
+              }
+              onChange={(
+                e
+              ) =>
                 setAddress(
-                  e.target.value
+                  e.target
+                    .value
                 )
               }
-              placeholder={t.placeholder}
-              className="min-w-0 flex-1 rounded-xl bg-transparent px-4 py-4 font-mono text-sm text-slate-200 outline-none placeholder:text-slate-600"
+              placeholder={
+                t.placeholder
+              }
+              className="flex-1 bg-transparent px-4 py-4 font-mono text-sm outline-none"
             />
 
             <button
@@ -2355,7 +3435,7 @@ You can still review the overview, agent trace and raw evidence.
               disabled={
                 loading
               }
-              className="rounded-xl bg-white px-6 py-4 text-sm font-semibold text-slate-950 transition hover:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-50"
+              className="rounded-xl bg-white px-6 py-4 text-sm font-semibold text-slate-950 disabled:opacity-50"
             >
               {loading
                 ? t.investigating
@@ -2364,20 +3444,8 @@ You can still review the overview, agent trace and raw evidence.
 
           </div>
 
-          <div className="mx-auto mt-4 flex max-w-3xl items-center justify-center gap-2 text-xs text-slate-500">
-
-            <div
-              className={`h-1.5 w-1.5 rounded-full ${
-                loading
-                  ? "animate-pulse bg-cyan-400"
-                  : hasResults
-                  ? "bg-emerald-400"
-                  : "bg-slate-600"
-              }`}
-            />
-
+          <div className="mt-4 text-xs text-slate-500">
             {status}
-
           </div>
 
         </section>
@@ -2387,63 +3455,50 @@ You can still review the overview, agent trace and raw evidence.
 
             <section className="grid gap-3 md:grid-cols-4">
 
-              <div
-                className={`rounded-2xl border p-5 ${risk.border} ${risk.bg}`}
-              >
-
-                <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500">
-                  {t.rootRisk}
-                </div>
-
-                <div className="mt-4 flex items-end gap-3">
-
-                  <div className="text-4xl font-semibold tracking-tight">
-                    {riskScore}
-                  </div>
-
-                  <div
-                    className={`pb-1 text-xs font-semibold ${risk.className}`}
-                  >
-                    {risk.label}
-                  </div>
-
-                </div>
-
-                <div className="mt-3 text-xs text-slate-500">
-                  {t.rootRiskDesc}
-                </div>
-
-              </div>
+              <SummaryCard
+                label={
+                  t.rootRisk
+                }
+                value={`${riskScore}`}
+                description={
+                  risk.label
+                }
+                valueClass={
+                  risk.className
+                }
+              />
 
               <SummaryCard
-                label={t.observedEvents}
-                value={String(
-                  totalEvents
-                )}
+                label={
+                  t.observedEvents
+                }
+                value={`${totalEvents}`}
                 description={`${transactions.length} ETH · ${tokenTransfers.length} ERC-20 · ${internalTransactions.length} Internal`}
               />
 
               <SummaryCard
-                label={t.signals}
-                value={String(
-                  anomalies.length
-                )}
+                label={
+                  t.changeSignals
+                }
+                value={`${importantChanges.length}`}
                 description={
-                  t.signalDesc
+                  t.whatChangedDesc
                 }
               />
 
               <SummaryCard
-                label={t.agentTrace}
+                label={
+                  t.agentTrace
+                }
                 value={
                   secondHop
-                    ? t.hopDone
-                    : t.noHop
+                    ? "1"
+                    : "0"
                 }
                 description={
                   secondHop
-                    ? t.hopDoneDesc
-                    : t.noHopDesc
+                    ? t.firstHop
+                    : t.noSecondHop
                 }
               />
 
@@ -2451,7 +3506,7 @@ You can still review the overview, agent trace and raw evidence.
 
             <section className="mt-7">
 
-              <div className="inline-flex max-w-full gap-1 overflow-x-auto rounded-xl border border-white/[0.07] bg-white/[0.025] p-1.5">
+              <div className="inline-flex rounded-xl border border-white/[0.07] bg-white/[0.025] p-1.5">
 
                 <TabButton
                   active={
@@ -2513,40 +3568,59 @@ You can still review the overview, agent trace and raw evidence.
 
             </section>
 
-            {activeTab === "overview" && (
-              <section className="mt-5 grid gap-5 lg:grid-cols-[1.05fr_0.95fr]">
+            {activeTab ===
+              "overview" && (
+              <div className="mt-5 space-y-5">
 
                 <Panel>
 
                   <SectionHeader
-                    title={t.keySignals}
+                    number="01"
+                    title={
+                      t.whatChanged
+                    }
                     subtitle={
-                      t.keySignalsDesc
+                      t.whatChangedDesc
                     }
                   />
 
-                  <div className="mt-5 space-y-2.5">
+                  <p className="mt-5 text-sm leading-7 text-slate-400">
+                    {language ===
+                    "zh"
+                      ? changeAnalysis?.summaryZh
+                      : changeAnalysis?.summaryEn}
+                  </p>
 
-                    {anomalies.length === 0 ? (
-                      <EmptyState>
-                        {t.noSignals}
-                      </EmptyState>
-                    ) : (
-                      anomalies
-                        .slice(0, 5)
-                        .map(
-                          (
-                            anomaly,
-                            index
-                          ) => (
-                            <AnomalyCard
-                              key={`${anomaly.type}-${index}`}
-                              anomaly={
-                                anomaly
-                              }
-                            />
-                          )
+                  <div className="mt-5 grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+
+                    {importantChanges.length ? (
+                      importantChanges.map(
+                        (item) => (
+                          <ChangeCard
+                            key={
+                              item.key
+                            }
+                            item={
+                              item
+                            }
+                            language={
+                              language
+                            }
+                            recentLabel={
+                              t.recent
+                            }
+                            baselineLabel={
+                              t.baseline
+                            }
+                          />
                         )
+                      )
+                    ) : (
+                      <div className="md:col-span-2 lg:col-span-3">
+                        <EmptyState>
+                          {t.noChange}
+                        </EmptyState>
+                      </div>
                     )}
 
                   </div>
@@ -2556,259 +3630,280 @@ You can still review the overview, agent trace and raw evidence.
                 <Panel>
 
                   <SectionHeader
+                    number="02"
                     title={
-                      t.directCounterparties
+                      t.whyChanged
                     }
                     subtitle={
-                      t.directCounterpartiesDesc
+                      t.whyChangedDesc
                     }
                   />
 
-                  <div className="mt-5 space-y-2.5">
+                  <div className="mt-5 grid gap-3 lg:grid-cols-3">
 
-                    {counterparties
-                      .slice(0, 4)
-                      .map(
-                        (
-                          item,
-                          index
-                        ) => (
-                          <CompactCounterparty
+                    {changeAnalysis?.causes.length ? (
+                      changeAnalysis.causes.map(
+                        (cause) => (
+                          <CauseCard
                             key={
-                              item.address
+                              cause.id
                             }
-                            item={
-                              item
+                            cause={
+                              cause
                             }
-                            rank={
-                              index + 1
+                            language={
+                              language
+                            }
+                            confidenceLabel={
+                              t.confidence
+                            }
+                            levels={{
+                              LOW:
+                                t.low,
+                              MEDIUM:
+                                t.medium,
+                              HIGH:
+                                t.high,
+                            }}
+                          />
+                        )
+                      )
+                    ) : (
+                      <div className="lg:col-span-3">
+                        <EmptyState>
+                          {t.noCause}
+                        </EmptyState>
+                      </div>
+                    )}
+
+                  </div>
+
+                </Panel>
+
+                <Panel>
+
+                  <SectionHeader
+                    number="03"
+                    title={
+                      t.potentialImpact
+                    }
+                    subtitle={
+                      t.potentialImpactDesc
+                    }
+                  />
+
+                  <div className="mt-5 grid gap-3 md:grid-cols-2">
+
+                    {changeAnalysis?.impacts.length ? (
+                      changeAnalysis.impacts.map(
+                        (impact) => (
+                          <ImpactCard
+                            key={
+                              impact.id
+                            }
+                            impact={
+                              impact
                             }
                             language={
                               language
                             }
                           />
                         )
-                      )}
+                      )
+                    ) : (
+                      <div className="md:col-span-2">
+                        <EmptyState>
+                          {t.noImpact}
+                        </EmptyState>
+                      </div>
+                    )}
 
                   </div>
 
-                  <button
-                    onClick={() =>
-                      setActiveTab(
-                        "trace"
-                      )
+                </Panel>
+
+                <Panel>
+
+                  <SectionHeader
+                    number="04"
+                    title={
+                      t.supportingEvidence
                     }
-                    className="mt-5 text-sm text-cyan-400 transition hover:text-cyan-300"
-                  >
-                    {t.viewTrace}
-                  </button>
+                    subtitle={
+                      t.supportingEvidenceDesc
+                    }
+                  />
+
+                  <div className="mt-5 grid gap-3 md:grid-cols-3">
+
+                    <EvidenceSummary
+                      title={
+                        language ===
+                        "zh"
+                          ? "异常信号"
+                          : "Anomaly Signals"
+                      }
+                      value={`${anomalies.length}`}
+                      description={
+                        language ===
+                        "zh"
+                          ? "用于验证行为变化是否异常"
+                          : "Used to validate whether behavioral changes are unusual"
+                      }
+                    />
+
+                    <EvidenceSummary
+                      title={
+                        language ===
+                        "zh"
+                          ? "直接对手方"
+                          : "Direct Counterparties"
+                      }
+                      value={`${counterparties.length}`}
+                      description={
+                        language ===
+                        "zh"
+                          ? "用于解释资金流向是否发生集中"
+                          : "Used to explain whether fund relationships became concentrated"
+                      }
+                    />
+
+                    <EvidenceSummary
+                      title={
+                        language ===
+                        "zh"
+                          ? "重点原始证据"
+                          : "Flagged Raw Evidence"
+                      }
+                      value={`${flaggedHashes.size}`}
+                      description={
+                        language ===
+                        "zh"
+                          ? "异常规则直接引用的 Tx Hash"
+                          : "Tx hashes directly referenced by anomaly rules"
+                      }
+                    />
+
+                  </div>
 
                 </Panel>
 
-              </section>
+              </div>
             )}
 
-            {activeTab === "trace" && (
+            {activeTab ===
+              "trace" && (
               <section className="mt-5">
 
                 <Panel>
 
                   <SectionHeader
+                    number="Agent"
                     title={
-                      t.investigationPath
+                      t.traceTitle
                     }
                     subtitle={
-                      t.investigationPathDesc
+                      t.traceDesc
                     }
                   />
 
-                  <div className="mt-5 rounded-xl border border-white/[0.06] bg-white/[0.025] p-4">
-
-                    <div className="text-sm font-medium text-slate-200">
-                      {t.howToRead}
-                    </div>
-
-                    <p className="mt-2 max-w-4xl text-sm leading-6 text-slate-500">
-                      {t.howToReadDesc}
-                    </p>
-
-                  </div>
-
                   {!secondHop ? (
-                    <div className="mt-6">
-
+                    <div className="mt-5">
                       <EmptyState>
                         {t.noSecondHop}
                       </EmptyState>
-
                     </div>
                   ) : (
-                    <div className="mt-8">
+                    <div className="mt-8 flex flex-col items-center">
 
-                      <div className="flex flex-col items-center">
+                      <TraceNode
+                        badge={
+                          t.rootWallet
+                        }
+                        address={
+                          address
+                        }
+                      />
 
-                        <TraceNode
-                          badge={
-                            t.rootWallet
-                          }
-                          title={
-                            t.investigatedAddress
-                          }
-                          address={
-                            address
-                          }
-                          description={
-                            t.rootDesc
-                          }
-                          tone="root"
-                        />
+                      <TraceArrow
+                        label={
+                          t.directRelation
+                        }
+                      />
 
-                        <TraceArrow
-                          label={
-                            t.directRelationship
-                          }
-                        />
+                      <TraceNode
+                        badge={
+                          t.firstHop
+                        }
+                        address={
+                          secondHop
+                            .investigatedAddress
+                        }
+                      />
 
-                        <TraceNode
-                          badge={
-                            t.firstHop
-                          }
-                          title={
-                            t.selectedCounterparty
-                          }
-                          address={
-                            secondHop.investigatedAddress
-                          }
-                          description={
-                            t.selectedDesc
-                          }
-                          tone="selected"
-                          extra={
-                            selectedFirstHop
-                              ? `${selectedFirstHop.interactionCount} ${
-                                  language ===
-                                  "zh"
-                                    ? "次交互"
-                                    : "events"
-                                } · ${selectedFirstHop.sources.join(
-                                  " / "
-                                )}`
-                              : undefined
-                          }
-                        />
+                      <TraceArrow
+                        label={
+                          t.continueInvestigation
+                        }
+                      />
 
-                        <TraceArrow
-                          label={
-                            t.agentInvestigates
-                          }
-                        />
+                      <div className="w-full">
 
-                        <div className="w-full">
+                        <div className="text-center">
 
-                          <div className="text-center">
-
-                            <div className="text-[11px] font-semibold uppercase tracking-[0.24em] text-violet-300">
-                              {t.secondHop}
-                            </div>
-
-                            <h4 className="mt-2 text-lg font-medium">
-                              {t.connectedAddresses}
-                            </h4>
-
-                            <p className="mx-auto mt-2 max-w-2xl text-sm leading-6 text-slate-500">
-                              {t.connectedDesc}
-                            </p>
-
+                          <div className="text-xs uppercase tracking-[0.22em] text-violet-300">
+                            {t.secondHop}
                           </div>
 
-                          <div className="mx-auto mt-6 h-8 w-px bg-white/[0.12]" />
+                          <p className="mx-auto mt-2 max-w-2xl text-sm text-slate-500">
+                            {t.secondHopDesc}
+                          </p>
 
-                          <div className="grid gap-3 md:grid-cols-3">
+                        </div>
 
-                            {secondHop.counterparties
-                              .filter(
-                                (item) =>
-                                  item.address.toLowerCase() !==
-                                  address.toLowerCase()
+                        <div className="mt-5 grid gap-3 md:grid-cols-3">
+
+                          {secondHop.counterparties
+                            .filter(
+                              (item) =>
+                                item.address.toLowerCase() !==
+                                address.toLowerCase()
+                            )
+                            .slice(0, 6)
+                            .map(
+                              (
+                                item,
+                                index
+                              ) => (
+                                <CounterpartyCard
+                                  key={
+                                    item.address
+                                  }
+                                  item={
+                                    item
+                                  }
+                                  index={
+                                    index + 1
+                                  }
+                                  language={
+                                    language
+                                  }
+                                />
                               )
-                              .slice(0, 6)
-                              .map(
-                                (
-                                  item,
-                                  index
-                                ) => (
-                                  <SecondHopNode
-                                    key={
-                                      item.address
-                                    }
-                                    item={
-                                      item
-                                    }
-                                    index={
-                                      index + 1
-                                    }
-                                    language={
-                                      language
-                                    }
-                                    labels={
-                                      t
-                                    }
-                                  />
-                                )
-                              )}
-
-                          </div>
+                            )}
 
                         </div>
 
                       </div>
 
-                      <div className="mt-6 grid gap-3 sm:grid-cols-4">
-
-                        <MiniMetric
-                          label={
-                            t.ethTx
-                          }
-                          value={String(
-                            secondHop.transactionCount
-                          )}
-                        />
-
-                        <MiniMetric
-                          label="ERC-20"
-                          value={String(
-                            secondHop.tokenTransferCount
-                          )}
-                        />
-
-                        <MiniMetric
-                          label={
-                            t.internal
-                          }
-                          value={String(
-                            secondHop.internalTransactionCount
-                          )}
-                        />
-
-                        <MiniMetric
-                          label={
-                            t.nextHop
-                          }
-                          value={String(
-                            secondHop.counterparties.length
-                          )}
-                        />
-
-                      </div>
-
-                      <div className="mt-5 rounded-xl border border-amber-500/15 bg-amber-500/[0.035] p-4">
+                      <div className="mt-6 w-full rounded-xl border border-amber-500/15 bg-amber-500/[0.03] p-4">
 
                         <div className="text-sm font-medium text-amber-300">
                           {t.important}
                         </div>
 
                         <p className="mt-2 text-sm leading-6 text-slate-500">
-                          {t.importantDesc}
+                          {t.importantText}
                         </p>
 
                       </div>
@@ -2821,139 +3916,111 @@ You can still review the overview, agent trace and raw evidence.
               </section>
             )}
 
-            {activeTab === "report" && (
+            {activeTab ===
+              "report" && (
               <section className="mt-5">
 
                 <Panel>
 
                   <SectionHeader
+                    number="AI"
                     title={
-                      t.aiReport
+                      t.reportTitle
                     }
                     subtitle={
-                      t.aiReportDesc
+                      t.reportDesc
                     }
                   />
 
-                  <div className="mt-6 rounded-xl border border-white/[0.06] bg-black/[0.12] p-5 md:p-7">
+                  <div className="mt-6 rounded-xl border border-white/[0.06] bg-black/[0.12] p-6">
 
                     {aiLoading ? (
-                      <div className="flex items-center gap-3 py-12 text-sm text-cyan-400">
-
-                        <div className="h-1.5 w-1.5 animate-pulse rounded-full bg-cyan-400" />
-
-                        {t.generatingReport}
-
+                      <div className="py-10 text-sm text-cyan-400">
+                        {t.generating}
                       </div>
-                    ) : aiReport ? (
-                      <article>
-
-                        <ReactMarkdown
-                          remarkPlugins={[
-                            remarkGfm,
-                          ]}
-                          components={{
-                            h2: ({
-                              children,
-                            }) => (
-                              <h2 className="mb-4 mt-9 border-b border-white/[0.06] pb-3 text-xl font-semibold first:mt-0">
-                                {children}
-                              </h2>
-                            ),
-
-                            h3: ({
-                              children,
-                            }) => (
-                              <h3 className="mb-3 mt-7 text-base font-semibold text-cyan-300">
-                                {children}
-                              </h3>
-                            ),
-
-                            p: ({
-                              children,
-                            }) => (
-                              <p className="my-4 max-w-4xl text-sm leading-7 text-slate-300">
-                                {children}
-                              </p>
-                            ),
-
-                            strong: ({
-                              children,
-                            }) => (
-                              <strong className="font-semibold text-white">
-                                {children}
-                              </strong>
-                            ),
-
-                            ul: ({
-                              children,
-                            }) => (
-                              <ul className="my-4 list-disc space-y-2 pl-5 text-sm text-slate-300">
-                                {children}
-                              </ul>
-                            ),
-
-                            ol: ({
-                              children,
-                            }) => (
-                              <ol className="my-4 list-decimal space-y-2 pl-5 text-sm text-slate-300">
-                                {children}
-                              </ol>
-                            ),
-
-                            li: ({
-                              children,
-                            }) => (
-                              <li className="leading-7">
-                                {children}
-                              </li>
-                            ),
-
-                            blockquote: ({
-                              children,
-                            }) => (
-                              <blockquote className="my-6 border-l-2 border-cyan-400/70 bg-cyan-400/[0.04] px-4 py-2 text-slate-400">
-                                {children}
-                              </blockquote>
-                            ),
-
-                            table: ({
-                              children,
-                            }) => (
-                              <div className="my-6 overflow-x-auto">
-
-                                <table className="w-full border-collapse text-sm">
-                                  {children}
-                                </table>
-
-                              </div>
-                            ),
-
-                            th: ({
-                              children,
-                            }) => (
-                              <th className="border border-white/[0.08] bg-white/[0.04] px-4 py-3 text-left font-medium">
-                                {children}
-                              </th>
-                            ),
-
-                            td: ({
-                              children,
-                            }) => (
-                              <td className="border border-white/[0.06] px-4 py-3 align-top text-slate-400">
-                                {children}
-                              </td>
-                            ),
-                          }}
-                        >
-                          {aiReport}
-                        </ReactMarkdown>
-
-                      </article>
                     ) : (
-                      <EmptyState>
-                        {t.noReport}
-                      </EmptyState>
+                      <ReactMarkdown
+                        remarkPlugins={[
+                          remarkGfm,
+                        ]}
+                        components={{
+                          h2: ({
+                            children,
+                          }) => (
+                            <h2 className="mb-4 mt-9 border-b border-white/[0.06] pb-3 text-xl font-semibold first:mt-0">
+                              {children}
+                            </h2>
+                          ),
+
+                          h3: ({
+                            children,
+                          }) => (
+                            <h3 className="mb-3 mt-6 text-base font-semibold text-cyan-300">
+                              {children}
+                            </h3>
+                          ),
+
+                          p: ({
+                            children,
+                          }) => (
+                            <p className="my-4 text-sm leading-7 text-slate-300">
+                              {children}
+                            </p>
+                          ),
+
+                          ul: ({
+                            children,
+                          }) => (
+                            <ul className="my-4 list-disc space-y-2 pl-5 text-sm text-slate-300">
+                              {children}
+                            </ul>
+                          ),
+
+                          ol: ({
+                            children,
+                          }) => (
+                            <ol className="my-4 list-decimal space-y-2 pl-5 text-sm text-slate-300">
+                              {children}
+                            </ol>
+                          ),
+
+                          blockquote: ({
+                            children,
+                          }) => (
+                            <blockquote className="my-5 border-l-2 border-cyan-400 px-4 text-sm text-slate-400">
+                              {children}
+                            </blockquote>
+                          ),
+
+                          table: ({
+                            children,
+                          }) => (
+                            <div className="my-5 overflow-x-auto">
+                              <table className="w-full text-sm">
+                                {children}
+                              </table>
+                            </div>
+                          ),
+
+                          th: ({
+                            children,
+                          }) => (
+                            <th className="border border-white/[0.08] px-3 py-2 text-left">
+                              {children}
+                            </th>
+                          ),
+
+                          td: ({
+                            children,
+                          }) => (
+                            <td className="border border-white/[0.06] px-3 py-2 text-slate-400">
+                              {children}
+                            </td>
+                          ),
+                        }}
+                      >
+                        {aiReport}
+                      </ReactMarkdown>
                     )}
 
                   </div>
@@ -2963,49 +4030,83 @@ You can still review the overview, agent trace and raw evidence.
               </section>
             )}
 
-            {activeTab === "evidence" && (
+            {activeTab ===
+              "evidence" && (
               <section className="mt-5">
 
                 <Panel>
 
                   <SectionHeader
+                    number="Data"
                     title={
-                      t.evidenceExplorer
+                      t.evidenceTitle
                     }
                     subtitle={
-                      t.evidenceExplorerDesc
+                      t.evidenceDesc
                     }
                   />
 
-                  <div className="mt-6 space-y-2">
+                  {flaggedHashes.size > 0 && (
+                    <div className="mt-5 flex items-start gap-3 rounded-xl border border-orange-400/20 bg-orange-400/[0.04] p-4">
+
+                      <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-orange-400/10 text-sm text-orange-300">
+                        !
+                      </div>
+
+                      <div>
+                        <div className="text-sm font-medium text-orange-200">
+                          {language === "zh"
+                            ? `检测到 ${flaggedHashes.size} 个重点 Tx Hash`
+                            : `${flaggedHashes.size} flagged transaction hash(es) detected`}
+                        </div>
+
+                        <p className="mt-1 text-xs leading-5 text-slate-500">
+                          {t.evidenceReason}
+                        </p>
+                      </div>
+
+                    </div>
+                  )}
+
+                  <div className="mt-5 space-y-2">
 
                     <EvidenceAccordion
                       title={
-                        t.anomalySignals
+                        t.anomalies
                       }
                       count={
                         anomalies.length
                       }
+                      flaggedCount={
+                        anomalies.filter(
+                          (item) =>
+                            Boolean(
+                              item.evidenceHash
+                            )
+                        ).length
+                      }
+                      language={
+                        language
+                      }
                     >
-
                       <div className="space-y-2">
-
                         {anomalies.map(
                           (
-                            anomaly,
+                            item,
                             index
                           ) => (
-                            <AnomalyCard
-                              key={`${anomaly.type}-${index}`}
+                            <AnomalyEvidence
+                              key={`${item.type}-${index}`}
                               anomaly={
-                                anomaly
+                                item
+                              }
+                              language={
+                                language
                               }
                             />
                           )
                         )}
-
                       </div>
-
                     </EvidenceAccordion>
 
                     <EvidenceAccordion
@@ -3015,44 +4116,30 @@ You can still review the overview, agent trace and raw evidence.
                       count={
                         transactions.length
                       }
+                      flaggedCount={
+                        flaggedEthCount
+                      }
+                      language={
+                        language
+                      }
                     >
-
-                      <EvidenceList>
-
-                        {transactions
-                          .slice(0, 30)
-                          .map((tx) => (
-                            <TransactionRow
-                              key={
-                                tx.hash
-                              }
-                              direction={
-                                tx.from?.toLowerCase() ===
-                                address.toLowerCase()
-                                  ? "OUT"
-                                  : "IN"
-                              }
-                              title={`${formatEth(
-                                tx.value
-                              )} ETH`}
-                              subtitle={`Block ${tx.blockNumber}`}
-                              hash={
-                                tx.hash
-                              }
-                              from={
-                                tx.from
-                              }
-                              to={
-                                tx.to
-                              }
-                              time={formatTime(
-                                tx.timeStamp
-                              )}
-                            />
-                          ))}
-
-                      </EvidenceList>
-
+                      <TransactionEvidence
+                        items={
+                          transactions
+                        }
+                        address={
+                          address
+                        }
+                        formatTime={
+                          formatTime
+                        }
+                        flaggedHashes={
+                          flaggedHashes
+                        }
+                        language={
+                          language
+                        }
+                      />
                     </EvidenceAccordion>
 
                     <EvidenceAccordion
@@ -3062,54 +4149,30 @@ You can still review the overview, agent trace and raw evidence.
                       count={
                         tokenTransfers.length
                       }
+                      flaggedCount={
+                        flaggedTokenCount
+                      }
+                      language={
+                        language
+                      }
                     >
-
-                      <EvidenceList>
-
-                        {tokenTransfers
-                          .slice(0, 30)
-                          .map(
-                            (
-                              tx,
-                              index
-                            ) => (
-                              <TransactionRow
-                                key={`${tx.hash}-${index}`}
-                                direction={
-                                  tx.from?.toLowerCase() ===
-                                  address.toLowerCase()
-                                    ? "OUT"
-                                    : "IN"
-                                }
-                                title={`${formatTokenAmount(
-                                  tx.value,
-                                  tx.tokenDecimal
-                                )} ${
-                                  tx.tokenSymbol ||
-                                  "TOKEN"
-                                }`}
-                                subtitle={
-                                  tx.tokenName ||
-                                  "Unknown Token"
-                                }
-                                hash={
-                                  tx.hash
-                                }
-                                from={
-                                  tx.from
-                                }
-                                to={
-                                  tx.to
-                                }
-                                time={formatTime(
-                                  tx.timeStamp
-                                )}
-                              />
-                            )
-                          )}
-
-                      </EvidenceList>
-
+                      <TokenEvidence
+                        items={
+                          tokenTransfers
+                        }
+                        address={
+                          address
+                        }
+                        formatTime={
+                          formatTime
+                        }
+                        flaggedHashes={
+                          flaggedHashes
+                        }
+                        language={
+                          language
+                        }
+                      />
                     </EvidenceAccordion>
 
                     <EvidenceAccordion
@@ -3119,50 +4182,30 @@ You can still review the overview, agent trace and raw evidence.
                       count={
                         internalTransactions.length
                       }
+                      flaggedCount={
+                        flaggedInternalCount
+                      }
+                      language={
+                        language
+                      }
                     >
-
-                      <EvidenceList>
-
-                        {internalTransactions
-                          .slice(0, 30)
-                          .map(
-                            (
-                              tx,
-                              index
-                            ) => (
-                              <TransactionRow
-                                key={`${tx.hash}-${index}`}
-                                direction={
-                                  tx.from?.toLowerCase() ===
-                                  address.toLowerCase()
-                                    ? "OUT"
-                                    : "IN"
-                                }
-                                title={`${formatEth(
-                                  tx.value
-                                )} ETH`}
-                                subtitle={`Internal · ${
-                                  tx.type ||
-                                  "unknown"
-                                }`}
-                                hash={
-                                  tx.hash
-                                }
-                                from={
-                                  tx.from
-                                }
-                                to={
-                                  tx.to
-                                }
-                                time={formatTime(
-                                  tx.timeStamp
-                                )}
-                              />
-                            )
-                          )}
-
-                      </EvidenceList>
-
+                      <InternalEvidence
+                        items={
+                          internalTransactions
+                        }
+                        address={
+                          address
+                        }
+                        formatTime={
+                          formatTime
+                        }
+                        flaggedHashes={
+                          flaggedHashes
+                        }
+                        language={
+                          language
+                        }
+                      />
                     </EvidenceAccordion>
 
                   </div>
@@ -3185,22 +4228,29 @@ function LanguageSwitch({
   language,
   onChange,
 }: {
-  language: Language;
-  onChange: (
-    language: Language
-  ) => void;
+  language:
+    Language;
+
+  onChange:
+    (
+      lang:
+        Language
+    ) => void;
 }) {
   return (
-    <div className="flex rounded-lg border border-white/[0.08] bg-white/[0.03] p-1">
+    <div className="flex rounded-lg border border-white/[0.08] p-1">
 
       <button
         onClick={() =>
-          onChange("zh")
+          onChange(
+            "zh"
+          )
         }
-        className={`rounded-md px-3 py-1.5 text-xs transition ${
-          language === "zh"
+        className={`rounded-md px-3 py-1.5 text-xs ${
+          language ===
+          "zh"
             ? "bg-white text-slate-950"
-            : "text-slate-500 hover:text-white"
+            : "text-slate-500"
         }`}
       >
         中文
@@ -3208,12 +4258,15 @@ function LanguageSwitch({
 
       <button
         onClick={() =>
-          onChange("en")
+          onChange(
+            "en"
+          )
         }
-        className={`rounded-md px-3 py-1.5 text-xs transition ${
-          language === "en"
+        className={`rounded-md px-3 py-1.5 text-xs ${
+          language ===
+          "en"
             ? "bg-white text-slate-950"
-            : "text-slate-500 hover:text-white"
+            : "text-slate-500"
         }`}
       >
         EN
@@ -3226,32 +4279,48 @@ function LanguageSwitch({
 function Panel({
   children,
 }: {
-  children: ReactNode;
+  children:
+    ReactNode;
 }) {
   return (
-    <div className="rounded-2xl border border-white/[0.065] bg-white/[0.028] p-5 backdrop-blur-sm md:p-6">
+    <div className="rounded-2xl border border-white/[0.065] bg-white/[0.025] p-5 md:p-6">
       {children}
     </div>
   );
 }
 
 function SectionHeader({
+  number,
   title,
   subtitle,
 }: {
-  title: string;
-  subtitle: string;
+  number:
+    string;
+
+  title:
+    string;
+
+  subtitle:
+    string;
 }) {
   return (
-    <div>
+    <div className="flex gap-4">
 
-      <h3 className="text-lg font-medium tracking-tight">
-        {title}
-      </h3>
+      <div className="pt-0.5 text-xs font-medium text-cyan-400">
+        {number}
+      </div>
 
-      <p className="mt-1.5 max-w-3xl text-sm leading-6 text-slate-500">
-        {subtitle}
-      </p>
+      <div>
+
+        <h3 className="text-lg font-medium">
+          {title}
+        </h3>
+
+        <p className="mt-1 text-sm leading-6 text-slate-500">
+          {subtitle}
+        </p>
+
+      </div>
 
     </div>
   );
@@ -3261,19 +4330,28 @@ function SummaryCard({
   label,
   value,
   description,
+  valueClass = "",
 }: {
-  label: string;
-  value: string;
-  description: string;
+  label:
+    string;
+
+  value:
+    string;
+
+  description:
+    string;
+
+  valueClass?:
+    string;
 }) {
   return (
-    <div className="rounded-2xl border border-white/[0.065] bg-white/[0.028] p-5">
+    <div className="rounded-2xl border border-white/[0.06] bg-white/[0.025] p-5">
 
-      <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500">
+      <div className="text-[11px] uppercase tracking-[0.17em] text-slate-500">
         {label}
       </div>
 
-      <div className="mt-4 text-2xl font-semibold tracking-tight">
+      <div className={`mt-4 text-3xl font-semibold ${valueClass}`}>
         {value}
       </div>
 
@@ -3285,46 +4363,30 @@ function SummaryCard({
   );
 }
 
-function MiniMetric({
-  label,
-  value,
-}: {
-  label: string;
-  value: string;
-}) {
-  return (
-    <div className="rounded-xl border border-white/[0.06] bg-white/[0.025] p-4">
-
-      <div className="text-xs text-slate-500">
-        {label}
-      </div>
-
-      <div className="mt-2 text-xl font-medium">
-        {value}
-      </div>
-
-    </div>
-  );
-}
-
 function TabButton({
   active,
   onClick,
   children,
 }: {
-  active: boolean;
-  onClick: () => void;
-  children: ReactNode;
+  active:
+    boolean;
+
+  onClick:
+    () =>
+      void;
+
+  children:
+    ReactNode;
 }) {
   return (
     <button
       onClick={
         onClick
       }
-      className={`whitespace-nowrap rounded-lg px-4 py-2 text-sm transition ${
+      className={`rounded-lg px-4 py-2 text-sm ${
         active
           ? "bg-white text-slate-950"
-          : "text-slate-500 hover:text-slate-200"
+          : "text-slate-500 hover:text-white"
       }`}
     >
       {children}
@@ -3332,109 +4394,273 @@ function TabButton({
   );
 }
 
-function AnomalyCard({
-  anomaly,
+function ChangeCard({
+  item,
+  language,
+  recentLabel,
+  baselineLabel,
 }: {
-  anomaly: Anomaly;
+  item:
+    ChangeMetric;
+
+  language:
+    Language;
+
+  recentLabel:
+    string;
+
+  baselineLabel:
+    string;
 }) {
-  const accent =
-    anomaly.severity === "HIGH"
-      ? "bg-red-400"
-      : anomaly.severity === "MEDIUM"
-      ? "bg-amber-400"
-      : "bg-emerald-400";
+  const up =
+    item.direction ===
+    "UP";
+
+  const label =
+    language ===
+    "zh"
+      ? item.labelZh
+      : item.labelEn;
+
+  const unit =
+    language ===
+    "zh"
+      ? item.unitZh
+      : item.unitEn;
+
+  const explanation =
+    language ===
+    "zh"
+      ? item.explanationZh
+      : item.explanationEn;
 
   return (
     <div className="rounded-xl border border-white/[0.06] bg-black/[0.1] p-4">
 
-      <div className="flex items-start justify-between gap-4">
+      <div className="flex items-start justify-between">
 
-        <div className="flex gap-3">
+        <div className="text-sm font-medium">
+          {label}
+        </div>
 
-          <div
-            className={`mt-1.5 h-2 w-2 rounded-full ${accent}`}
-          />
+        <div
+          className={
+            up
+              ? "text-emerald-400"
+              : "text-orange-400"
+          }
+        >
+          {up
+            ? "↑"
+            : "↓"}
+        </div>
 
-          <div>
+      </div>
 
-            <div className="text-sm font-medium text-slate-200">
-              {anomaly.type}
-            </div>
+      <div className="mt-4 flex items-end gap-3">
 
-            <p className="mt-1.5 text-sm leading-6 text-slate-500">
-              {anomaly.description}
-            </p>
+        <div>
 
+          <div className="text-[10px] uppercase text-slate-600">
+            {baselineLabel}
+          </div>
+
+          <div className="mt-1 text-lg text-slate-500">
+            {formatMetricValue(
+              item.baseline
+            )}
+            {unit}
           </div>
 
         </div>
 
-        <div className="text-xs text-slate-500">
-          +{anomaly.score}
+        <div className="pb-1 text-slate-700">
+          →
+        </div>
+
+        <div>
+
+          <div className="text-[10px] uppercase text-slate-600">
+            {recentLabel}
+          </div>
+
+          <div className="mt-1 text-2xl font-semibold">
+            {formatMetricValue(
+              item.recent
+            )}
+            {unit}
+          </div>
+
         </div>
 
       </div>
+
+      <p className="mt-4 text-xs leading-5 text-slate-500">
+        {explanation}
+      </p>
 
     </div>
   );
 }
 
-function CompactCounterparty({
-  item,
-  rank,
+function CauseCard({
+  cause,
+  language,
+  confidenceLabel,
+  levels,
+}: {
+  cause:
+    CauseHypothesis;
+
+  language:
+    Language;
+
+  confidenceLabel:
+    string;
+
+  levels: {
+    LOW:
+      string;
+    MEDIUM:
+      string;
+    HIGH:
+      string;
+  };
+}) {
+  const title =
+    language ===
+    "zh"
+      ? cause.titleZh
+      : cause.titleEn;
+
+  const evidence =
+    language ===
+    "zh"
+      ? cause.evidenceZh
+      : cause.evidenceEn;
+
+  const explanation =
+    language ===
+    "zh"
+      ? cause.explanationZh
+      : cause.explanationEn;
+
+  return (
+    <div className="rounded-xl border border-white/[0.06] bg-black/[0.1] p-5">
+
+      <div className="flex items-start justify-between gap-3">
+
+        <div className="font-medium">
+          {title}
+        </div>
+
+        <div className="rounded-md bg-white/[0.05] px-2 py-1 text-[10px] text-slate-400">
+          {confidenceLabel}:{" "}
+          {levels[
+            cause.confidence
+          ]}
+        </div>
+
+      </div>
+
+      <div className="mt-4 space-y-2">
+
+        {evidence.map(
+          (
+            item,
+            index
+          ) => (
+            <div
+              key={
+                index
+              }
+              className="flex gap-2 text-xs text-slate-400"
+            >
+              <span className="text-emerald-400">
+                ✓
+              </span>
+
+              {item}
+            </div>
+          )
+        )}
+
+      </div>
+
+      <p className="mt-4 text-xs leading-6 text-slate-500">
+        {explanation}
+      </p>
+
+    </div>
+  );
+}
+
+function ImpactCard({
+  impact,
   language,
 }: {
-  item: Counterparty;
-  rank: number;
-  language: Language;
+  impact:
+    ImpactItem;
+
+  language:
+    Language;
 }) {
   return (
-    <div className="flex items-center justify-between gap-4 rounded-xl border border-white/[0.06] bg-black/[0.1] p-4">
+    <div className="rounded-xl border border-white/[0.06] bg-black/[0.1] p-5">
 
-      <div className="min-w-0">
-
-        <div className="text-[11px] text-slate-600">
-          {language === "zh"
-            ? `直接关系 #${rank}`
-            : `Direct #${rank}`}
-        </div>
-
-        <div className="mt-1 truncate font-mono text-sm text-slate-200">
-          {shortenGlobal(
-            item.address
-          )}
-        </div>
-
-        <div className="mt-2 flex flex-wrap gap-1.5">
-
-          {item.sources.map(
-            (source) => (
-              <span
-                key={source}
-                className="rounded-md bg-white/[0.04] px-2 py-1 text-[10px] text-slate-500"
-              >
-                {source}
-              </span>
-            )
-          )}
-
-        </div>
-
+      <div className="text-[10px] uppercase tracking-[0.16em] text-cyan-400">
+        {language ===
+        "zh"
+          ? impact.categoryZh
+          : impact.categoryEn}
       </div>
 
-      <div className="shrink-0 text-right">
-
-        <div className="text-lg font-medium">
-          {item.interactionCount}
-        </div>
-
-        <div className="text-[11px] text-slate-600">
-          {language === "zh"
-            ? "次事件"
-            : "events"}
-        </div>
-
+      <div className="mt-2 font-medium">
+        {language ===
+        "zh"
+          ? impact.titleZh
+          : impact.titleEn}
       </div>
+
+      <p className="mt-3 text-sm leading-6 text-slate-500">
+        {language ===
+        "zh"
+          ? impact.descriptionZh
+          : impact.descriptionEn}
+      </p>
+
+    </div>
+  );
+}
+
+function EvidenceSummary({
+  title,
+  value,
+  description,
+}: {
+  title:
+    string;
+
+  value:
+    string;
+
+  description:
+    string;
+}) {
+  return (
+    <div className="rounded-xl border border-white/[0.06] bg-black/[0.1] p-4">
+
+      <div className="text-xs text-slate-500">
+        {title}
+      </div>
+
+      <div className="mt-2 text-2xl font-semibold">
+        {value}
+      </div>
+
+      <p className="mt-2 text-xs leading-5 text-slate-600">
+        {description}
+      </p>
 
     </div>
   );
@@ -3442,59 +4668,24 @@ function CompactCounterparty({
 
 function TraceNode({
   badge,
-  title,
   address,
-  description,
-  tone,
-  extra,
 }: {
-  badge: string;
-  title: string;
-  address: string;
-  description: string;
-  tone:
-    | "root"
-    | "selected";
-  extra?: string;
+  badge:
+    string;
+
+  address:
+    string;
 }) {
-  const border =
-    tone === "root"
-      ? "border-cyan-400/25"
-      : "border-violet-400/25";
-
-  const badgeColor =
-    tone === "root"
-      ? "text-cyan-300"
-      : "text-violet-300";
-
   return (
-    <div
-      className={`w-full max-w-xl rounded-2xl border bg-white/[0.025] p-5 text-center ${border}`}
-    >
+    <div className="w-full max-w-xl rounded-xl border border-cyan-400/20 bg-cyan-400/[0.025] p-5 text-center">
 
-      <div
-        className={`text-[10px] font-semibold uppercase tracking-[0.24em] ${badgeColor}`}
-      >
+      <div className="text-[10px] uppercase tracking-[0.2em] text-cyan-300">
         {badge}
       </div>
 
-      <div className="mt-2 text-base font-medium">
-        {title}
-      </div>
-
-      <div className="mx-auto mt-3 max-w-lg break-all rounded-lg bg-black/[0.15] px-4 py-3 font-mono text-xs text-slate-300">
+      <div className="mt-3 break-all font-mono text-sm text-slate-300">
         {address}
       </div>
-
-      <p className="mt-3 text-sm leading-6 text-slate-500">
-        {description}
-      </p>
-
-      {extra && (
-        <div className="mt-3 text-xs text-slate-500">
-          {extra}
-        </div>
-      )}
 
     </div>
   );
@@ -3503,20 +4694,21 @@ function TraceNode({
 function TraceArrow({
   label,
 }: {
-  label: string;
+  label:
+    string;
 }) {
   return (
     <div className="flex flex-col items-center py-4">
 
-      <div className="h-7 w-px bg-white/[0.12]" />
+      <div className="h-6 w-px bg-white/[0.12]" />
 
-      <div className="rounded-full border border-white/[0.08] bg-[#08111d] px-3 py-1 text-[11px] text-slate-500">
+      <div className="rounded-full border border-white/[0.07] px-3 py-1 text-[10px] text-slate-500">
         {label}
       </div>
 
-      <div className="h-7 w-px bg-white/[0.12]" />
+      <div className="h-6 w-px bg-white/[0.12]" />
 
-      <div className="-mt-1 text-xs text-slate-600">
+      <div className="text-xs text-slate-600">
         ▼
       </div>
 
@@ -3524,109 +4716,42 @@ function TraceArrow({
   );
 }
 
-function SecondHopNode({
+function CounterpartyCard({
   item,
   index,
   language,
-  labels,
 }: {
-  item: Counterparty;
-  index: number;
-  language: Language;
-  labels: typeof copy.zh;
+  item:
+    Counterparty;
+
+  index:
+    number;
+
+  language:
+    Language;
 }) {
   return (
     <div className="rounded-xl border border-violet-400/15 bg-violet-400/[0.025] p-4">
 
-      <div className="flex items-start justify-between gap-3">
-
-        <div className="min-w-0">
-
-          <div className="text-[10px] uppercase tracking-[0.18em] text-violet-300">
-            {labels.connectedAddress} #{index}
-          </div>
-
-          <div className="mt-2 truncate font-mono text-sm text-slate-200">
-            {shortenGlobal(
-              item.address
-            )}
-          </div>
-
-        </div>
-
-        <div className="shrink-0 text-right">
-
-          <div className="text-base font-medium">
-            {item.interactionCount}
-          </div>
-
-          <div className="text-[10px] text-slate-600">
-            {labels.events}
-          </div>
-
-        </div>
-
+      <div className="text-[10px] text-violet-300">
+        {language ===
+        "zh"
+          ? `关联地址 #${index}`
+          : `Connected Address #${index}`}
       </div>
 
-      <div className="mt-4 grid grid-cols-2 gap-3">
-
-        <SmallStat
-          label={labels.outgoing}
-          value={String(
-            item.outgoingCount
-          )}
-        />
-
-        <SmallStat
-          label={labels.incoming}
-          value={String(
-            item.incomingCount
-          )}
-        />
-
-      </div>
-
-      <div className="mt-4 flex flex-wrap gap-1.5">
-
-        {item.sources.map(
-          (source) => (
-            <span
-              key={source}
-              className="rounded-md bg-white/[0.04] px-2 py-1 text-[10px] text-slate-500"
-            >
-              {source}
-            </span>
-          )
+      <div className="mt-2 truncate font-mono text-sm">
+        {shortenGlobal(
+          item.address
         )}
-
       </div>
 
-      <div className="mt-4 border-t border-white/[0.06] pt-3 text-[11px] leading-5 text-slate-600">
-        {language === "zh"
-          ? "这是第一跳地址的关系，不代表与根地址直接关联。"
-          : "Connected to the selected first-hop address, not necessarily directly to the root wallet."}
-      </div>
-
-    </div>
-  );
-}
-
-function SmallStat({
-  label,
-  value,
-}: {
-  label: string;
-  value: string;
-}) {
-  return (
-    <div>
-
-      <div className="text-[11px] text-slate-600">
-        {label}
-      </div>
-
-      <div className="mt-1 text-sm text-slate-300">
-        {value}
+      <div className="mt-3 text-xs text-slate-500">
+        {item.interactionCount}{" "}
+        {language ===
+        "zh"
+          ? "次观测事件"
+          : "observed events"}
       </div>
 
     </div>
@@ -3636,24 +4761,50 @@ function SmallStat({
 function EvidenceAccordion({
   title,
   count,
+  flaggedCount,
+  language,
   children,
 }: {
-  title: string;
-  count: number;
-  children: ReactNode;
+  title:
+    string;
+
+  count:
+    number;
+
+  flaggedCount:
+    number;
+
+  language:
+    Language;
+
+  children:
+    ReactNode;
 }) {
   return (
-    <details className="group rounded-xl border border-white/[0.06] bg-black/[0.08]">
+    <details className="group rounded-xl border border-white/[0.06] bg-black/[0.04]">
 
-      <summary className="flex cursor-pointer list-none items-center justify-between px-5 py-4">
+      <summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-5 py-4">
 
-        <div className="text-sm font-medium">
-          {title}
+        <div className="flex items-center gap-3">
+
+          <span className="text-sm">
+            {title}
+          </span>
+
+          {flaggedCount > 0 && (
+            <span className="rounded-full border border-orange-400/20 bg-orange-400/[0.08] px-2.5 py-1 text-[10px] font-medium text-orange-300">
+              {language ===
+              "zh"
+                ? `${flaggedCount} 条重点`
+                : `${flaggedCount} flagged`}
+            </span>
+          )}
+
         </div>
 
         <div className="flex items-center gap-3">
 
-          <span className="rounded-md bg-white/[0.04] px-2 py-1 text-[11px] text-slate-500">
+          <span className="text-xs text-slate-500">
             {count}
           </span>
 
@@ -3673,45 +4824,391 @@ function EvidenceAccordion({
   );
 }
 
-function EvidenceList({
-  children,
+function AnomalyEvidence({
+  anomaly,
+  language,
 }: {
-  children: ReactNode;
+  anomaly:
+    Anomaly;
+
+  language:
+    Language;
 }) {
+  const hasEvidence =
+    Boolean(
+      anomaly.evidenceHash
+    );
+
   return (
-    <div className="space-y-2">
-      {children}
+    <div
+      className={`rounded-lg border p-4 ${
+        hasEvidence
+          ? "border-orange-400/20 bg-orange-400/[0.035]"
+          : "border-transparent bg-black/[0.12]"
+      }`}
+    >
+
+      <div className="flex items-start justify-between gap-3">
+
+        <div>
+
+          <div className="text-sm font-medium">
+            {anomaly.type}
+          </div>
+
+          <p className="mt-2 text-xs leading-5 text-slate-500">
+            {anomaly.description}
+          </p>
+
+        </div>
+
+        {hasEvidence && (
+          <span className="shrink-0 rounded-md bg-orange-400/10 px-2 py-1 text-[10px] font-medium text-orange-300">
+            {language ===
+            "zh"
+              ? "有链上证据"
+              : "Evidence Linked"}
+          </span>
+        )}
+
+      </div>
+
+      {anomaly.evidenceHash && (
+        <div className="mt-3 border-t border-orange-400/10 pt-3 font-mono text-[10px] text-orange-300/70">
+          Tx:{" "}
+          {shortenGlobal(
+            anomaly.evidenceHash
+          )}
+        </div>
+      )}
+
     </div>
   );
 }
 
-function TransactionRow({
+function TransactionEvidence({
+  items,
+  address,
+  formatTime,
+  flaggedHashes,
+  language,
+}: {
+  items:
+    Transaction[];
+
+  address:
+    string;
+
+  formatTime:
+    (
+      time:
+        string
+    ) =>
+      string;
+
+  flaggedHashes:
+    Set<string>;
+
+  language:
+    Language;
+}) {
+  const ordered =
+    [...items]
+      .slice(0, 30)
+      .sort(
+        (a, b) =>
+          Number(
+            flaggedHashes.has(
+              b.hash?.toLowerCase()
+            )
+          ) -
+          Number(
+            flaggedHashes.has(
+              a.hash?.toLowerCase()
+            )
+          )
+      );
+
+  return (
+    <div className="space-y-2">
+
+      {ordered.map(
+        (
+          tx
+        ) => {
+          const flagged =
+            flaggedHashes.has(
+              tx.hash?.toLowerCase()
+            );
+
+          return (
+            <EvidenceRow
+              key={
+                tx.hash
+              }
+              direction={
+                tx.from?.toLowerCase() ===
+                address.toLowerCase()
+                  ? "OUT"
+                  : "IN"
+              }
+              title={`${formatEtherSafe(
+                tx.value
+              )} ETH`}
+              hash={
+                tx.hash
+              }
+              time={
+                formatTime(
+                  tx.timeStamp
+                )
+              }
+              flagged={
+                flagged
+              }
+              language={
+                language
+              }
+            />
+          );
+        }
+      )}
+
+    </div>
+  );
+}
+
+function TokenEvidence({
+  items,
+  address,
+  formatTime,
+  flaggedHashes,
+  language,
+}: {
+  items:
+    TokenTransfer[];
+
+  address:
+    string;
+
+  formatTime:
+    (
+      time:
+        string
+    ) =>
+      string;
+
+  flaggedHashes:
+    Set<string>;
+
+  language:
+    Language;
+}) {
+  const ordered =
+    [...items]
+      .slice(0, 30)
+      .sort(
+        (a, b) =>
+          Number(
+            flaggedHashes.has(
+              b.hash?.toLowerCase()
+            )
+          ) -
+          Number(
+            flaggedHashes.has(
+              a.hash?.toLowerCase()
+            )
+          )
+      );
+
+  return (
+    <div className="space-y-2">
+
+      {ordered.map(
+        (
+          tx,
+          index
+        ) => {
+          const flagged =
+            flaggedHashes.has(
+              tx.hash?.toLowerCase()
+            );
+
+          return (
+            <EvidenceRow
+              key={`${tx.hash}-${index}`}
+              direction={
+                tx.from?.toLowerCase() ===
+                address.toLowerCase()
+                  ? "OUT"
+                  : "IN"
+              }
+              title={
+                tx.tokenSymbol ||
+                "TOKEN"
+              }
+              hash={
+                tx.hash
+              }
+              time={
+                formatTime(
+                  tx.timeStamp
+                )
+              }
+              flagged={
+                flagged
+              }
+              language={
+                language
+              }
+            />
+          );
+        }
+      )}
+
+    </div>
+  );
+}
+
+function InternalEvidence({
+  items,
+  address,
+  formatTime,
+  flaggedHashes,
+  language,
+}: {
+  items:
+    InternalTransaction[];
+
+  address:
+    string;
+
+  formatTime:
+    (
+      time:
+        string
+    ) =>
+      string;
+
+  flaggedHashes:
+    Set<string>;
+
+  language:
+    Language;
+}) {
+  const ordered =
+    [...items]
+      .slice(0, 30)
+      .sort(
+        (a, b) =>
+          Number(
+            flaggedHashes.has(
+              b.hash?.toLowerCase()
+            )
+          ) -
+          Number(
+            flaggedHashes.has(
+              a.hash?.toLowerCase()
+            )
+          )
+      );
+
+  return (
+    <div className="space-y-2">
+
+      {ordered.map(
+        (
+          tx,
+          index
+        ) => {
+          const flagged =
+            flaggedHashes.has(
+              tx.hash?.toLowerCase()
+            );
+
+          return (
+            <EvidenceRow
+              key={`${tx.hash}-${index}`}
+              direction={
+                tx.from?.toLowerCase() ===
+                address.toLowerCase()
+                  ? "OUT"
+                  : "IN"
+              }
+              title={`${formatEtherSafe(
+                tx.value
+              )} ETH · Internal`}
+              hash={
+                tx.hash
+              }
+              time={
+                formatTime(
+                  tx.timeStamp
+                )
+              }
+              flagged={
+                flagged
+              }
+              language={
+                language
+              }
+            />
+          );
+        }
+      )}
+
+    </div>
+  );
+}
+
+function EvidenceRow({
   direction,
   title,
-  subtitle,
   hash,
-  from,
-  to,
   time,
+  flagged,
+  language,
 }: {
-  direction: "IN" | "OUT";
-  title: string;
-  subtitle: string;
-  hash: string;
-  from: string;
-  to: string;
-  time: string;
+  direction:
+    "IN" |
+    "OUT";
+
+  title:
+    string;
+
+  hash:
+    string;
+
+  time:
+    string;
+
+  flagged:
+    boolean;
+
+  language:
+    Language;
 }) {
   return (
-    <div className="rounded-lg border border-white/[0.05] bg-black/[0.1] p-4">
+    <div
+      className={`relative overflow-hidden rounded-lg border p-4 transition ${
+        flagged
+          ? "border-orange-400/30 bg-orange-400/[0.055] shadow-[0_0_0_1px_rgba(251,146,60,0.03)]"
+          : "border-transparent bg-black/[0.12]"
+      }`}
+    >
+
+      {flagged && (
+        <div className="absolute inset-y-0 left-0 w-[3px] bg-orange-400" />
+      )}
 
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
 
         <div className="flex items-center gap-3">
 
           <span
-            className={`rounded-md px-2 py-1 text-[10px] font-medium ${
-              direction === "OUT"
+            className={`rounded px-2 py-1 text-[10px] ${
+              direction ===
+              "OUT"
                 ? "bg-orange-400/10 text-orange-300"
                 : "bg-emerald-400/10 text-emerald-300"
             }`}
@@ -3721,54 +5218,47 @@ function TransactionRow({
 
           <div>
 
-            <div className="text-sm text-slate-200">
-              {title}
+            <div className="flex flex-wrap items-center gap-2">
+
+              <div className="text-sm">
+                {title}
+              </div>
+
+              {flagged && (
+                <span className="rounded-md border border-orange-400/20 bg-orange-400/10 px-2 py-1 text-[9px] font-semibold uppercase tracking-[0.12em] text-orange-300">
+                  {language ===
+                  "zh"
+                    ? "重点证据"
+                    : "Flagged Evidence"}
+                </span>
+              )}
+
             </div>
 
-            <div className="mt-0.5 text-[11px] text-slate-600">
-              {subtitle}
+            <div className="mt-1 font-mono text-[10px] text-slate-600">
+              {shortenGlobal(
+                hash
+              )}
             </div>
 
           </div>
 
         </div>
 
-        <div className="text-[11px] text-slate-600">
+        <div className="text-[10px] text-slate-600">
           {time}
         </div>
 
       </div>
 
-      <div className="mt-3 grid gap-2 text-[11px] text-slate-600 md:grid-cols-3">
-
-        <div>
-          Tx{" "}
-          <span className="font-mono text-slate-400">
-            {shortenGlobal(
-              hash
-            )}
-          </span>
+      {flagged && (
+        <div className="mt-3 rounded-md bg-orange-400/[0.04] px-3 py-2 text-[10px] leading-5 text-orange-200/60">
+          {language ===
+          "zh"
+            ? "该交易被异常检测规则直接引用，建议优先核查。"
+            : "This transaction is directly referenced by an anomaly rule and should be reviewed first."}
         </div>
-
-        <div>
-          From{" "}
-          <span className="font-mono text-slate-400">
-            {shortenGlobal(
-              from
-            )}
-          </span>
-        </div>
-
-        <div>
-          To{" "}
-          <span className="font-mono text-slate-400">
-            {shortenGlobal(
-              to
-            )}
-          </span>
-        </div>
-
-      </div>
+      )}
 
     </div>
   );
@@ -3777,7 +5267,8 @@ function TransactionRow({
 function EmptyState({
   children,
 }: {
-  children: ReactNode;
+  children:
+    ReactNode;
 }) {
   return (
     <div className="rounded-xl border border-dashed border-white/[0.08] px-5 py-10 text-center text-sm text-slate-500">
@@ -3786,19 +5277,80 @@ function EmptyState({
   );
 }
 
-function shortenGlobal(
-  value: string
+function formatMetricValue(
+  value:
+    number
 ) {
-  if (!value) {
+  if (
+    Math.abs(
+      value
+    ) >=
+    1000
+  ) {
+    return value.toLocaleString(
+      undefined,
+      {
+        maximumFractionDigits:
+          1,
+      }
+    );
+  }
+
+  if (
+    Math.abs(
+      value
+    ) >=
+    10
+  ) {
+    return value.toFixed(
+      1
+    );
+  }
+
+  return value.toFixed(
+    2
+  );
+}
+
+function formatEtherSafe(
+  value:
+    string
+) {
+  try {
+    return Number(
+      ethers.formatEther(
+        value ||
+          "0"
+      )
+    ).toFixed(
+      4
+    );
+  } catch {
+    return "0.0000";
+  }
+}
+
+function shortenGlobal(
+  value:
+    string
+) {
+  if (
+    !value
+  ) {
     return "N/A";
   }
 
-  if (value.length <= 20) {
+  if (
+    value.length <=
+    20
+  ) {
     return value;
   }
 
   return `${value.slice(
     0,
     10
-  )}...${value.slice(-8)}`;
+  )}...${value.slice(
+    -8
+  )}`;
 }

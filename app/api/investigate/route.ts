@@ -1,14 +1,100 @@
-import { NextRequest, NextResponse } from "next/server";
-import { ProxyAgent, fetch as undiciFetch } from "undici";
+import {
+  NextRequest,
+  NextResponse,
+} from "next/server";
 
-type Language = "zh" | "en";
+import {
+  ProxyAgent,
+  fetch as undiciFetch,
+} from "undici";
+
+type Language =
+  | "zh"
+  | "en";
 
 type Anomaly = {
   type: string;
-  severity: "LOW" | "MEDIUM" | "HIGH";
+  severity:
+    | "LOW"
+    | "MEDIUM"
+    | "HIGH";
   description: string;
   score: number;
   evidenceHash?: string;
+};
+
+type ChangeMetric = {
+  key: string;
+
+  labelZh: string;
+  labelEn: string;
+
+  baseline: number;
+  recent: number;
+
+  unitZh: string;
+  unitEn: string;
+
+  direction:
+    | "UP"
+    | "DOWN"
+    | "STABLE";
+
+  magnitude: number;
+  important: boolean;
+
+  explanationZh: string;
+  explanationEn: string;
+};
+
+type CauseHypothesis = {
+  id: string;
+
+  titleZh: string;
+  titleEn: string;
+
+  confidence:
+    | "LOW"
+    | "MEDIUM"
+    | "HIGH";
+
+  evidenceZh: string[];
+  evidenceEn: string[];
+
+  explanationZh: string;
+  explanationEn: string;
+};
+
+type ImpactItem = {
+  id: string;
+
+  categoryZh: string;
+  categoryEn: string;
+
+  titleZh: string;
+  titleEn: string;
+
+  descriptionZh: string;
+  descriptionEn: string;
+
+  severity:
+    | "LOW"
+    | "MEDIUM"
+    | "HIGH";
+};
+
+type ChangeAnalysis = {
+  recentStart: number;
+  baselineStart: number;
+
+  metrics: ChangeMetric[];
+
+  causes: CauseHypothesis[];
+
+  impacts: ImpactItem[];
+
+  summaryZh: string;
+  summaryEn: string;
 };
 
 type TransactionSummary = {
@@ -17,7 +103,9 @@ type TransactionSummary = {
   to: string;
   valueEth: string;
   time: string;
-  direction: "IN" | "OUT";
+  direction:
+    | "IN"
+    | "OUT";
   blockNumber: string;
 };
 
@@ -25,7 +113,9 @@ type TokenTransferSummary = {
   hash: string;
   from: string;
   to: string;
-  direction: "IN" | "OUT";
+  direction:
+    | "IN"
+    | "OUT";
   amount: string;
   symbol: string;
   tokenName: string;
@@ -38,7 +128,9 @@ type InternalTransactionSummary = {
   hash: string;
   from: string;
   to: string;
-  direction: "IN" | "OUT";
+  direction:
+    | "IN"
+    | "OUT";
   valueEth: string;
   type: string;
   time: string;
@@ -87,109 +179,210 @@ type SecondHopSummary = {
 };
 
 // ============================================================
-// 防滥用：限流 + 报告缓存
+// 防滥用
 // ============================================================
 
-const RATE_LIMIT_PER_WINDOW = 5;
-const RATE_LIMIT_WINDOW_MS = 60_000;
-const CACHE_TTL_MS = 10 * 60_000;
+const RATE_LIMIT_PER_WINDOW =
+  5;
 
-const rateLimitMap = new Map<
-  string,
-  {
-    count: number;
-    resetAt: number;
+const RATE_LIMIT_WINDOW_MS =
+  60_000;
+
+const CACHE_TTL_MS =
+  10 *
+  60_000;
+
+const rateLimitMap =
+  new Map<
+    string,
+    {
+      count:
+        number;
+
+      resetAt:
+        number;
+    }
+  >();
+
+const reportCache =
+  new Map<
+    string,
+    {
+      report:
+        string;
+
+      model:
+        string;
+
+      cachedAt:
+        number;
+    }
+  >();
+
+function getClientIp(
+  request:
+    NextRequest
+) {
+  const xff =
+    request.headers.get(
+      "x-forwarded-for"
+    );
+
+  if (
+    xff
+  ) {
+    return xff
+      .split(
+        ","
+      )[0]
+      .trim();
   }
->();
 
-const reportCache = new Map<
-  string,
-  {
-    report: string;
-    model: string;
-    cachedAt: number;
-  }
->();
-
-function getClientIp(request: NextRequest) {
-  const xff = request.headers.get("x-forwarded-for");
-
-  if (xff) {
-    return xff.split(",")[0].trim();
-  }
-
-  return request.headers.get("x-real-ip") || "unknown";
+  return (
+    request.headers.get(
+      "x-real-ip"
+    ) ||
+    "unknown"
+  );
 }
 
-function hitRateLimit(ip: string) {
-  const now = Date.now();
+function hitRateLimit(
+  ip:
+    string
+) {
+  const now =
+    Date.now();
 
-  if (rateLimitMap.size > 1000) {
-    for (const [key, value] of rateLimitMap) {
-      if (now >= value.resetAt) {
-        rateLimitMap.delete(key);
+  if (
+    rateLimitMap.size >
+    1000
+  ) {
+    for (
+      const [
+        key,
+        value,
+      ] of rateLimitMap
+    ) {
+      if (
+        now >=
+        value.resetAt
+      ) {
+        rateLimitMap.delete(
+          key
+        );
       }
     }
   }
 
-  const entry = rateLimitMap.get(ip);
+  const entry =
+    rateLimitMap.get(
+      ip
+    );
 
-  if (!entry || now >= entry.resetAt) {
-    rateLimitMap.set(ip, {
-      count: 1,
-      resetAt: now + RATE_LIMIT_WINDOW_MS,
-    });
+  if (
+    !entry ||
+    now >=
+      entry.resetAt
+  ) {
+    rateLimitMap.set(
+      ip,
+      {
+        count:
+          1,
+
+        resetAt:
+          now +
+          RATE_LIMIT_WINDOW_MS,
+      }
+    );
 
     return false;
   }
 
-  entry.count += 1;
+  entry.count +=
+    1;
 
-  return entry.count > RATE_LIMIT_PER_WINDOW;
+  return (
+    entry.count >
+    RATE_LIMIT_PER_WINDOW
+  );
 }
 
 function cleanupCache() {
-  const now = Date.now();
+  const now =
+    Date.now();
 
-  if (reportCache.size < 500) {
+  if (
+    reportCache.size <
+    500
+  ) {
     return;
   }
 
-  for (const [key, value] of reportCache) {
-    if (now - value.cachedAt >= CACHE_TTL_MS) {
-      reportCache.delete(key);
+  for (
+    const [
+      key,
+      value,
+    ] of reportCache
+  ) {
+    if (
+      now -
+        value.cachedAt >=
+      CACHE_TTL_MS
+    ) {
+      reportCache.delete(
+        key
+      );
     }
   }
 }
 
-export async function POST(request: NextRequest) {
-  const apiKey = process.env.DEEPSEEK_API_KEY;
+export async function POST(
+  request:
+    NextRequest
+) {
+  const apiKey =
+    process.env
+      .DEEPSEEK_API_KEY;
 
-  if (!apiKey) {
+  if (
+    !apiKey
+  ) {
     return NextResponse.json(
       {
-        error: "DEEPSEEK_API_KEY is missing",
+        error:
+          "DEEPSEEK_API_KEY is missing",
       },
       {
-        status: 500,
+        status:
+          500,
       }
     );
   }
 
   try {
-    const body = await request.json();
+    const body =
+      await request.json();
 
     const {
       address,
       balance,
+
       riskScore,
       riskLevel,
 
+      language,
+
       anomalies,
+
+      changeAnalysis,
+
       transactions,
       tokenTransfers,
       internalTransactions,
+
       counterparties,
+
       secondHop,
 
       analyzedTransactionCount,
@@ -199,300 +392,500 @@ export async function POST(request: NextRequest) {
       evidenceTransactionCount,
       evidenceTokenTransferCount,
       evidenceInternalTransactionCount,
-
-      language,
     }: {
-      address: string;
-      balance: string;
-      riskScore: number;
-      riskLevel: string;
+      address:
+        string;
 
-      anomalies: Anomaly[];
+      balance:
+        string;
 
-      transactions: TransactionSummary[];
-      tokenTransfers: TokenTransferSummary[];
-      internalTransactions: InternalTransactionSummary[];
+      riskScore:
+        number;
 
-      counterparties: CounterpartySummary[];
+      riskLevel:
+        string;
 
-      secondHop?: SecondHopSummary | null;
+      language?:
+        Language;
 
-      analyzedTransactionCount: number;
-      analyzedTokenTransferCount: number;
-      analyzedInternalTransactionCount: number;
+      anomalies:
+        Anomaly[];
 
-      evidenceTransactionCount: number;
-      evidenceTokenTransferCount: number;
-      evidenceInternalTransactionCount: number;
+      changeAnalysis:
+        ChangeAnalysis;
 
-      language?: Language;
-    } = body;
+      transactions:
+        TransactionSummary[];
 
-    if (!address) {
+      tokenTransfers:
+        TokenTransferSummary[];
+
+      internalTransactions:
+        InternalTransactionSummary[];
+
+      counterparties:
+        CounterpartySummary[];
+
+      secondHop?:
+        SecondHopSummary |
+        null;
+
+      analyzedTransactionCount:
+        number;
+
+      analyzedTokenTransferCount:
+        number;
+
+      analyzedInternalTransactionCount:
+        number;
+
+      evidenceTransactionCount:
+        number;
+
+      evidenceTokenTransferCount:
+        number;
+
+      evidenceInternalTransactionCount:
+        number;
+    } =
+      body;
+
+    if (
+      !address
+    ) {
       return NextResponse.json(
         {
-          error: "Address is required",
+          error:
+            "Address is required",
         },
         {
-          status: 400,
+          status:
+            400,
         }
       );
     }
 
-    const selectedLanguage: Language =
-      language === "en" ? "en" : "zh";
+    const selectedLanguage:
+      Language =
+      language ===
+      "en"
+        ? "en"
+        : "zh";
 
-    const normalizedAddress = address.trim().toLowerCase();
+    const isZh =
+      selectedLanguage ===
+      "zh";
+
+    const normalizedAddress =
+      address
+        .trim()
+        .toLowerCase();
 
     cleanupCache();
 
-    // 中文 / 英文使用不同缓存
-    const cacheKey = `v4:${selectedLanguage}:${normalizedAddress}`;
+    const cacheKey =
+      `change-v1:${selectedLanguage}:${normalizedAddress}`;
 
-    const cached = reportCache.get(cacheKey);
+    const cached =
+      reportCache.get(
+        cacheKey
+      );
 
     if (
       cached &&
-      Date.now() - cached.cachedAt < CACHE_TTL_MS
+      Date.now() -
+        cached.cachedAt <
+        CACHE_TTL_MS
     ) {
       return NextResponse.json({
-        report: cached.report,
-        model: cached.model,
-        cached: true,
+        report:
+          cached.report,
+
+        model:
+          cached.model,
+
+        cached:
+          true,
       });
     }
 
-    const clientIp = getClientIp(request);
+    const clientIp =
+      getClientIp(
+        request
+      );
 
-    if (hitRateLimit(clientIp)) {
+    if (
+      hitRateLimit(
+        clientIp
+      )
+    ) {
       return NextResponse.json(
         {
           error:
-            selectedLanguage === "zh"
+            isZh
               ? `请求过于频繁，请稍后再试。每分钟最多生成 ${RATE_LIMIT_PER_WINDOW} 次新的 AI 调查报告。`
-              : `Too many requests. You may generate up to ${RATE_LIMIT_PER_WINDOW} new AI reports per minute.`,
+              : `Too many requests. Up to ${RATE_LIMIT_PER_WINDOW} new AI reports may be generated per minute.`,
         },
         {
-          status: 429,
+          status:
+            429,
+
           headers: {
-            "Retry-After": "60",
+            "Retry-After":
+              "60",
           },
         }
       );
     }
 
-    const anomalyText =
-      anomalies?.length > 0
-        ? anomalies
-            .map(
-              (item, index) => `
-### Signal ${index + 1}
+    // ========================================================
+    // Change Analysis
+    // ========================================================
 
-- Type: ${item.type}
-- Severity: ${item.severity}
-- Risk contribution: ${item.score}
-- Description: ${item.description}
-- Evidence transaction: ${item.evidenceHash || "N/A"}
-`
-            )
-            .join("\n")
-        : "No major anomaly signals were detected by the current rules.";
-
-    const transactionText =
-      transactions?.length > 0
-        ? transactions
-            .map(
-              (tx, index) => `
-### ETH Transaction ${index + 1}
-
-- Direction: ${tx.direction}
-- Amount: ${tx.valueEth} ETH
-- Tx Hash: ${tx.hash}
-- From: ${tx.from}
-- To: ${tx.to}
-- Block: ${tx.blockNumber}
-- Time: ${tx.time}
-`
-            )
-            .join("\n")
-        : "No normal ETH transaction evidence is available.";
-
-    const tokenText =
-      tokenTransfers?.length > 0
-        ? tokenTransfers
-            .map(
-              (tx, index) => `
-### ERC-20 Transfer ${index + 1}
-
-- Direction: ${tx.direction}
-- Token: ${tx.tokenName} (${tx.symbol})
-- Amount: ${tx.amount} ${tx.symbol}
-- Tx Hash: ${tx.hash}
-- From: ${tx.from}
-- To: ${tx.to}
-- Token Contract: ${tx.contractAddress}
-- Block: ${tx.blockNumber}
-- Time: ${tx.time}
-`
-            )
-            .join("\n")
-        : "No ERC-20 token transfer evidence is available.";
-
-    const internalText =
-      internalTransactions?.length > 0
-        ? internalTransactions
-            .map(
-              (tx, index) => `
-### Internal Transaction ${index + 1}
-
-- Direction: ${tx.direction}
-- Amount: ${tx.valueEth} ETH
-- Call Type: ${tx.type || "unknown"}
-- Tx Hash: ${tx.hash}
-- From: ${tx.from}
-- To: ${tx.to}
-- Block: ${tx.blockNumber}
-- Time: ${tx.time}
-- Failed: ${tx.isError === "1" ? "Yes" : "No"}
-`
-            )
-            .join("\n")
-        : "No internal transaction evidence is available.";
-
-    const counterpartyText =
-      counterparties?.length > 0
-        ? counterparties
-            .slice(0, 10)
-            .map(
-              (item, index) => `
-### Counterparty ${index + 1}
-
-- Address: ${item.address}
-- Interaction Events: ${item.interactionCount}
-- Outgoing Events: ${item.outgoingCount}
-- Incoming Events: ${item.incomingCount}
-- ETH Out: ${item.ethOut} ETH
-- ETH In: ${item.ethIn} ETH
-- ERC-20 Events: ${item.tokenEventCount}
-- Internal Events: ${item.internalEventCount}
-- Sources: ${item.sources.join(", ")}
-- Tokens: ${
-                item.tokenSymbols.length
-                  ? item.tokenSymbols.join(", ")
-                  : "None"
-              }
-- Last Interaction: ${item.lastInteraction}
-`
-            )
-            .join("\n")
-        : "No sufficient counterparty information is available.";
-
-    const secondHopText = secondHop
-      ? `
-### Automated Second-Hop Investigation
-
-- Root Address: ${secondHop.selectedFromAddress}
-- Selected First-Hop Counterparty: ${secondHop.investigatedAddress}
-- Selection Reason: ${secondHop.selectionReason}
-- ETH Transaction Sample: ${secondHop.transactionCount}
-- ERC-20 Sample: ${secondHop.tokenTransferCount}
-- Internal Transaction Sample: ${secondHop.internalTransactionCount}
-- Total Observed Events: ${secondHop.totalObservedEvents}
-- Root Address Observed Again: ${
-          secondHop.linksBackToRoot ? "Yes" : "No"
-        }
-- Observed Events With Root: ${secondHop.rootInteractionCount}
-
-Second-Hop Counterparties:
-
-${
-  secondHop.topCounterparties.length
-    ? secondHop.topCounterparties
+    const changeMetrics =
+      changeAnalysis
+        ?.metrics
+        ?.filter(
+          (
+            item
+          ) =>
+            item.important
+        )
         .map(
-          (item, index) => `
-#### Connected Address ${index + 1}
+          (
+            item,
+            index
+          ) => `
+### Change ${index + 1}
 
-- Address: ${item.address}
-- Interaction Events: ${item.interactionCount}
-- Outgoing Events: ${item.outgoingCount}
-- Incoming Events: ${item.incomingCount}
-- ETH Out: ${item.ethOut}
-- ETH In: ${item.ethIn}
-- Sources: ${item.sources.join(", ")}
-- Tokens: ${
-            item.tokenSymbols.length
-              ? item.tokenSymbols.join(", ")
-              : "None"
+- Metric: ${
+            isZh
+              ? item.labelZh
+              : item.labelEn
+          }
+- Baseline: ${item.baseline} ${
+            isZh
+              ? item.unitZh
+              : item.unitEn
+          }
+- Recent: ${item.recent} ${
+            isZh
+              ? item.unitZh
+              : item.unitEn
+          }
+- Direction: ${item.direction}
+- Explanation: ${
+            isZh
+              ? item.explanationZh
+              : item.explanationEn
           }
 `
         )
-        .join("\n")
-    : "No sufficient second-hop counterparty information is available."
+        .join(
+          "\n"
+        ) ||
+      "No material change metrics.";
+
+    const causeText =
+      changeAnalysis
+        ?.causes
+        ?.map(
+          (
+            cause,
+            index
+          ) => `
+### Cause Hypothesis ${index + 1}
+
+- Hypothesis: ${
+            isZh
+              ? cause.titleZh
+              : cause.titleEn
+          }
+- Confidence: ${cause.confidence}
+- Evidence:
+${
+  (
+    isZh
+      ? cause.evidenceZh
+      : cause.evidenceEn
+  )
+    .map(
+      (
+        x
+      ) =>
+        `  - ${x}`
+    )
+    .join(
+      "\n"
+    )
 }
+- Interpretation: ${
+            isZh
+              ? cause.explanationZh
+              : cause.explanationEn
+          }
 `
-      : "No valid second-hop investigation was completed.";
+        )
+        .join(
+          "\n"
+        ) ||
+      "No deterministic cause hypothesis.";
 
-    const isZh = selectedLanguage === "zh";
+    const impactText =
+      changeAnalysis
+        ?.impacts
+        ?.map(
+          (
+            impact,
+            index
+          ) => `
+### Impact ${index + 1}
 
-    const systemPrompt = isZh
-      ? `
-你是 ChainScope AI，一个 Ethereum 链上资金行为调查 Agent。
+- Category: ${
+            isZh
+              ? impact.categoryZh
+              : impact.categoryEn
+          }
+- Impact: ${
+            isZh
+              ? impact.titleZh
+              : impact.titleEn
+          }
+- Severity: ${impact.severity}
+- Explanation: ${
+            isZh
+              ? impact.descriptionZh
+              : impact.descriptionEn
+          }
+`
+        )
+        .join(
+          "\n"
+        ) ||
+      "No major potential impact identified.";
 
-系统提供：
+    // ========================================================
+    // Evidence
+    // ========================================================
 
-1. 普通 ETH Transactions
-2. ERC-20 Token Transfers
-3. Internal Transactions
-4. Counterparty Aggregation
-5. 自动 Second-Hop Investigation
+    const anomalyText =
+      anomalies?.length
+        ? anomalies
+            .map(
+              (
+                item,
+                index
+              ) => `
+### Anomaly ${index + 1}
+
+- Type: ${item.type}
+- Severity: ${item.severity}
+- Score contribution: ${item.score}
+- Description: ${item.description}
+- Evidence hash: ${item.evidenceHash || "N/A"}
+`
+            )
+            .join(
+              "\n"
+            )
+        : "No anomaly signals.";
+
+    const transactionText =
+      transactions?.length
+        ? transactions
+            .map(
+              (
+                tx,
+                index
+              ) => `
+### ETH ${index + 1}
+
+- Direction: ${tx.direction}
+- Amount: ${tx.valueEth} ETH
+- Hash: ${tx.hash}
+- From: ${tx.from}
+- To: ${tx.to}
+- Time: ${tx.time}
+`
+            )
+            .join(
+              "\n"
+            )
+        : "No ETH evidence.";
+
+    const tokenText =
+      tokenTransfers?.length
+        ? tokenTransfers
+            .map(
+              (
+                tx,
+                index
+              ) => `
+### ERC-20 ${index + 1}
+
+- Direction: ${tx.direction}
+- Token: ${tx.tokenName} (${tx.symbol})
+- Amount: ${tx.amount}
+- Hash: ${tx.hash}
+- From: ${tx.from}
+- To: ${tx.to}
+- Time: ${tx.time}
+`
+            )
+            .join(
+              "\n"
+            )
+        : "No ERC-20 evidence.";
+
+    const internalText =
+      internalTransactions?.length
+        ? internalTransactions
+            .map(
+              (
+                tx,
+                index
+              ) => `
+### Internal ${index + 1}
+
+- Direction: ${tx.direction}
+- Amount: ${tx.valueEth} ETH
+- Type: ${tx.type}
+- Hash: ${tx.hash}
+- From: ${tx.from}
+- To: ${tx.to}
+- Time: ${tx.time}
+`
+            )
+            .join(
+              "\n"
+            )
+        : "No internal evidence.";
+
+    const counterpartyText =
+      counterparties?.length
+        ? counterparties
+            .slice(
+              0,
+              8
+            )
+            .map(
+              (
+                item,
+                index
+              ) => `
+### Counterparty ${index + 1}
+
+- Address: ${item.address}
+- Events: ${item.interactionCount}
+- Outgoing: ${item.outgoingCount}
+- Incoming: ${item.incomingCount}
+- ETH Out: ${item.ethOut}
+- ETH In: ${item.ethIn}
+- Sources: ${item.sources.join(", ")}
+`
+            )
+            .join(
+              "\n"
+            )
+        : "No counterparty evidence.";
+
+    const secondHopText =
+      secondHop
+        ? `
+- Investigated first-hop address: ${secondHop.investigatedAddress}
+- Selection reason: ${secondHop.selectionReason}
+- Observed second-hop events: ${secondHop.totalObservedEvents}
+- Root observed again: ${secondHop.linksBackToRoot ? "Yes" : "No"}
+
+Second-Hop Counterparties:
+
+${secondHop.topCounterparties
+  .map(
+    (
+      item,
+      index
+    ) => `
+### Second-Hop ${index + 1}
+
+- Address: ${item.address}
+- Events: ${item.interactionCount}
+- ETH Out: ${item.ethOut}
+- ETH In: ${item.ethIn}
+- Sources: ${item.sources.join(", ")}
+`
+  )
+  .join(
+    "\n"
+  )}
+`
+        : "No second-hop evidence.";
+
+    const systemPrompt =
+      isZh
+        ? `
+你是 ChainScope AI，一个 Ethereum 链上变化调查 Agent。
+
+你的核心任务不是简单罗列交易，而是回答：
+
+1. 发生了什么变化？
+2. 为什么可能发生这些变化？
+3. 这些变化可能产生什么影响？
+4. 哪些链上证据支持这些判断？
+5. 哪些结论仍然存在不确定性？
 
 必须严格遵守：
 
-1. 不得编造身份、诈骗、攻击、洗钱、制裁、协议归属或资金来源。
-2. 异常行为不等于恶意行为。
-3. 对手方行为不能自动归因于根地址。
-4. 二跳地址行为不能直接计入根地址 Risk Score。
-5. Risk Score 只基于根地址确定性启发式规则。
-6. 必须区分链上事实、程序计算结果和可能解释。
-7. 证据不足时必须明确说明不确定。
-8. 必须使用简体中文。
-9. 输出标准 Markdown。
-10. 从二级标题开始。
-11. 不得声称执行了系统实际上没有执行的分析。
+- 所有“变化”必须来自程序提供的 baseline vs recent 计算结果。
+- 不得创造程序没有计算出的变化。
+- 原因只能作为“假设”或“可能解释”，不能写成已确认事实。
+- 不得编造地址身份、协议、攻击、诈骗、洗钱、制裁或资金来源。
+- 异常不等于恶意。
+- 关联关系不等于共同身份、控制或所有权。
+- 第二跳行为不得直接归因于根地址。
+- 第二跳结果不得直接加入根地址 Risk Score。
+- 潜在影响必须写成条件性判断，例如“如果该趋势持续……”。
+- AI 只负责解释程序提供的证据，不负责创造证据。
+- Risk Score 是实验性 MVP 启发式评分。
+- 使用简体中文。
+- 使用 Markdown。
+- 从 ## 开始，不要使用一级标题。
 `
-      : `
-You are ChainScope AI, an Ethereum on-chain investigation agent.
+        : `
+You are ChainScope AI, an Ethereum on-chain change investigation agent.
 
-The system provides:
+Your core task is not to simply list transactions. You must answer:
 
-1. Normal ETH Transactions
-2. ERC-20 Token Transfers
-3. Internal Transactions
-4. Counterparty Aggregation
-5. Automated Second-Hop Investigation
+1. What changed?
+2. Why may it have changed?
+3. What could the change affect?
+4. What evidence supports the explanation?
+5. What remains uncertain?
 
-You must follow these rules:
+Strict rules:
 
-1. Never invent identities, scams, hacks, money laundering, sanctions, protocol ownership, or sources of funds.
-2. Anomalous behavior does not prove malicious behavior.
-3. Counterparty behavior must not automatically be attributed to the root address.
-4. Second-hop behavior must not be included directly in the root Risk Score.
-5. The Risk Score is based only on deterministic heuristic rules for the root address.
-6. Clearly distinguish blockchain facts, program calculations, and interpretations.
-7. Clearly express uncertainty when evidence is insufficient.
-8. Write entirely in English.
-9. Use standard Markdown.
-10. Start from level-two headings.
-11. Never claim that the system performed an investigation it did not actually perform.
+- Every change must come from the supplied baseline-vs-recent calculations.
+- Never invent a change that was not calculated.
+- Causes must remain hypotheses or possible explanations, not confirmed facts.
+- Never invent identities, protocols, hacks, scams, laundering, sanctions, or sources of funds.
+- Anomalous behavior does not prove malicious intent.
+- Relationships do not prove shared identity, control, or ownership.
+- Second-hop behavior must not be attributed directly to the root address.
+- Second-hop behavior must not directly alter the root Risk Score.
+- Potential impacts must be conditional, such as "if the trend continues".
+- AI only explains supplied evidence.
+- The Risk Score is an experimental MVP heuristic.
+- Write entirely in English.
+- Use Markdown starting from level-two headings.
 `;
 
-    const userPrompt = isZh
-      ? `
+    const userPrompt =
+      isZh
+        ? `
 调查地址：
 
 ${address}
 
-当前 ETH Balance：
+ETH Balance：
 
 ${balance} ETH
 
@@ -504,25 +897,27 @@ Risk Level：
 
 ${riskLevel}
 
-## 数据规模
+## 程序计算出的变化摘要
 
-普通 ETH：
-- 系统分析：${analyzedTransactionCount}
-- AI 详细阅读：${evidenceTransactionCount}
+${changeAnalysis?.summaryZh || "无"}
 
-ERC-20：
-- 系统分析：${analyzedTokenTransferCount}
-- AI 详细阅读：${evidenceTokenTransferCount}
+## What Changed
 
-Internal：
-- 系统分析：${analyzedInternalTransactionCount}
-- AI 详细阅读：${evidenceInternalTransactionCount}
+${changeMetrics}
 
-## 异常信号
+## 程序生成的原因假设
+
+${causeText}
+
+## 程序生成的潜在影响
+
+${impactText}
+
+## 异常证据
 
 ${anomalyText}
 
-## 普通 ETH 证据
+## ETH 证据
 
 ${transactionText}
 
@@ -534,74 +929,133 @@ ${tokenText}
 
 ${internalText}
 
-## 第一跳对手方
+## 直接对手方
 
 ${counterpartyText}
 
-## 二跳调查
+## Second-Hop 验证
 
 ${secondHopText}
 
-请生成一份专业、简洁、适合黑客松 Demo 的中文 Ethereum 调查报告。
+## 数据规模
 
-严格使用：
+ETH：
+- 程序分析 ${analyzedTransactionCount}
+- AI 阅读 ${evidenceTransactionCount}
+
+ERC-20：
+- 程序分析 ${analyzedTokenTransferCount}
+- AI 阅读 ${evidenceTokenTransferCount}
+
+Internal：
+- 程序分析 ${analyzedInternalTransactionCount}
+- AI 阅读 ${evidenceInternalTransactionCount}
+
+生成调查报告。
+
+严格结构：
 
 ## 执行摘要
 
-## 主要发现
+用 3～6 句话回答：
+- 最重要的变化是什么
+- 最可能的原因假设是什么
+- 最值得关注的潜在影响是什么
 
-## 第一跳资金关系
+## 发生了什么变化
 
-## 二跳调查结果
+必须引用 baseline → recent 的真实数值。
 
-必须明确说明：
-二跳地址与根地址的关联不意味着共同身份、共同控制或恶意关系。
+不要只写“活动异常”，必须写清楚：
 
-## 多来源行为分析
+“什么指标，从多少变成多少”。
 
-### 普通 ETH
+## 为什么可能发生变化
 
-### ERC-20
+按假设分别分析。
 
-### Internal Transactions
+每个原因使用：
 
-### 跨来源关联
+### 原因假设名称
+
+- 支持证据
+- 反证或不足
+- 置信度
+- 为什么这只是可能解释而非确定事实
+
+## 潜在影响
+
+按照：
+
+- 资金影响
+- 行为影响
+- 网络关系影响
+- 调查影响
+
+只写有证据支持的内容。
+
+## Agent 验证过程
+
+解释：
+
+- 为什么查看主要对手方
+- 为什么继续做 Second-Hop
+- Second-Hop 是否支持或削弱前面的原因假设
+
+不要把 Second-Hop 地址行为归因于根地址。
 
 ## 关键证据
 
-使用：
+使用表格：
 
-| 层级 | 数据源 | 地址 / Tx Hash | 行为 | 说明 |
-| --- | --- | --- | --- | --- |
+| 证据类型 | 基准 / 近期 / 地址 / Tx | 观测事实 | 支持什么判断 |
+| --- | --- | --- | --- |
+
+只能引用真实提供的证据。
 
 ## 风险解释
 
-解释 ${riskScore}/100 的意义，以及为什么异常不等于恶意。
+解释 Risk Score ${riskScore}/100。
 
-## 建议进一步调查
+必须明确：
+Risk Score 和 Change Analysis 是两个不同维度。
+
+Risk Score 衡量启发式异常信号，
+Change Analysis 衡量近期行为相对基准发生了什么变化。
+
+## 下一步调查
+
+给出 3～6 个真正有助于验证原因的下一步，例如：
+
+- 地址实体标签
+- 合约和协议语义识别
+- 更长历史窗口
+- 第二个主要对手方追踪
+- 第三跳资金流
+- 外部事件时间线对齐
 
 ## 置信度与局限性
 
 必须说明：
 
-- 当前数据基于有限最近样本
-- 二跳只自动追踪一个主要第一跳对手方
-- 二跳结果不直接影响根地址 Risk Score
-- 当前没有完整地址实体标签
-- 当前没有完整协议语义识别
-- 当前属于 MVP 启发式分析
-- AI 只解释系统提供的证据
+- 当前只使用有限最近交易样本
+- baseline 是样本中的前一个时间窗口，不代表完整历史正常状态
+- 某些窗口可能交易量不足
+- Second-Hop 只追踪一个主要对手方
+- 当前缺少完整协议语义和实体标签
+- 原因分析属于基于证据的假设，不是确定归因
+- AI 只解释程序提供的信息
 
 最后写：
 
-> 本报告用于链上行为调查辅助，不构成对任何地址所有者身份、意图或合法性的判断。
+> 本报告用于链上变化调查辅助，不构成对任何地址所有者身份、意图、责任或合法性的判断。
 `
-      : `
-Investigated Address:
+        : `
+Investigated address:
 
 ${address}
 
-Current ETH Balance:
+ETH Balance:
 
 ${balance} ETH
 
@@ -613,21 +1067,23 @@ Risk Level:
 
 ${riskLevel}
 
-## Data Scope
+## Deterministic Change Summary
 
-Normal ETH:
-- Program analyzed: ${analyzedTransactionCount}
-- AI detailed evidence: ${evidenceTransactionCount}
+${changeAnalysis?.summaryEn || "None"}
 
-ERC-20:
-- Program analyzed: ${analyzedTokenTransferCount}
-- AI detailed evidence: ${evidenceTokenTransferCount}
+## What Changed
 
-Internal:
-- Program analyzed: ${analyzedInternalTransactionCount}
-- AI detailed evidence: ${evidenceInternalTransactionCount}
+${changeMetrics}
 
-## Anomaly Signals
+## Deterministic Cause Hypotheses
+
+${causeText}
+
+## Deterministic Potential Impacts
+
+${impactText}
+
+## Anomaly Evidence
 
 ${anomalyText}
 
@@ -643,160 +1099,214 @@ ${tokenText}
 
 ${internalText}
 
-## First-Hop Counterparties
+## Direct Counterparties
 
 ${counterpartyText}
 
-## Second-Hop Investigation
+## Second-Hop Validation
 
 ${secondHopText}
 
-Generate a professional and concise Ethereum investigation report suitable for a hackathon demo.
-
-Use exactly this structure:
+Generate the investigation report using this exact structure:
 
 ## Executive Summary
 
-## Key Findings
+## What Changed
 
-## First-Hop Relationships
+Quote real baseline → recent values.
 
-## Second-Hop Investigation
+## Why It May Have Changed
 
-Explicitly state that second-hop relationships do not prove shared identity, ownership, control, or malicious intent.
+For each hypothesis include:
+- Supporting evidence
+- Missing or contradictory evidence
+- Confidence
+- Why it is only a hypothesis
 
-## Multi-Source Behavior Analysis
+## Potential Impact
 
-### Normal ETH
+Cover only supported:
+- Financial impact
+- Behavioral impact
+- Network impact
+- Investigation impact
 
-### ERC-20
+## Agent Validation Process
 
-### Internal Transactions
-
-### Cross-Source Relationships
+Explain how counterparty and second-hop investigation helped validate the cause hypotheses.
 
 ## Key Evidence
 
 Use:
 
-| Layer | Source | Address / Tx Hash | Behavior | Notes |
-| --- | --- | --- | --- | --- |
+| Evidence Type | Baseline / Recent / Address / Tx | Observation | What It Supports |
+| --- | --- | --- | --- |
 
 ## Risk Interpretation
 
-Explain the meaning of ${riskScore}/100 and why anomalous behavior does not prove malicious intent.
+Explain that Risk Score and Change Analysis are separate dimensions.
 
-## Recommended Next Steps
+## Recommended Next Investigation
 
 ## Confidence & Limitations
 
-Explicitly state:
-
-- The investigation uses a limited recent sample.
-- Only one primary first-hop counterparty is automatically traced.
-- Second-hop behavior does not directly affect the root Risk Score.
-- Full entity attribution is not currently available.
-- Full protocol semantic interpretation is not currently available.
-- Current detection rules are MVP heuristics.
-- AI only explains evidence supplied by the system.
-
 End with:
 
-> This report is intended to assist on-chain investigation and does not determine the identity, intent, or legality of any address owner.
+> This report assists on-chain change investigation and does not determine the identity, intent, responsibility, or legality of any address owner.
 `;
 
     const proxyUrl =
-      process.env.HTTPS_PROXY || process.env.HTTP_PROXY;
+      process.env
+        .HTTPS_PROXY ||
+      process.env
+        .HTTP_PROXY;
 
-    const dispatcher = proxyUrl
-      ? new ProxyAgent(proxyUrl)
-      : undefined;
+    const dispatcher =
+      proxyUrl
+        ? new ProxyAgent(
+            proxyUrl
+          )
+        : undefined;
 
-    const response = await undiciFetch(
-      "https://api.deepseek.com/chat/completions",
-      {
-        method: "POST",
-        dispatcher,
+    const response =
+      await undiciFetch(
+        "https://api.deepseek.com/chat/completions",
+        {
+          method:
+            "POST",
 
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-          "Content-Type": "application/json",
-        },
+          dispatcher,
 
-        body: JSON.stringify({
-          model: "deepseek-chat",
+          headers: {
+            Authorization:
+              `Bearer ${apiKey}`,
 
-          messages: [
-            {
-              role: "system",
-              content: systemPrompt,
-            },
-            {
-              role: "user",
-              content: userPrompt,
-            },
-          ],
+            "Content-Type":
+              "application/json",
+          },
 
-          temperature: 0.2,
-          stream: false,
-        }),
-      }
-    );
+          body:
+            JSON.stringify({
+              model:
+                "deepseek-chat",
 
-    const data = (await response.json()) as any;
+              messages: [
+                {
+                  role:
+                    "system",
 
-    if (!response.ok) {
+                  content:
+                    systemPrompt,
+                },
+
+                {
+                  role:
+                    "user",
+
+                  content:
+                    userPrompt,
+                },
+              ],
+
+              temperature:
+                0.2,
+
+              stream:
+                false,
+            }),
+        }
+      );
+
+    const data =
+      (await response.json()) as any;
+
+    if (
+      !response.ok
+    ) {
       return NextResponse.json(
         {
           error:
-            data?.error?.message ||
+            data?.error
+              ?.message ||
             "DeepSeek API request failed",
         },
         {
-          status: response.status,
+          status:
+            response.status,
         }
       );
     }
 
     const report =
-      data?.choices?.[0]?.message?.content;
+      data?.choices?.[0]
+        ?.message?.content;
 
-    if (!report) {
+    if (
+      !report
+    ) {
       return NextResponse.json(
         {
-          error: "DeepSeek returned no report text",
+          error:
+            "DeepSeek returned no report text",
         },
         {
-          status: 500,
+          status:
+            500,
         }
       );
     }
 
-    const model = data.model || "deepseek-chat";
+    const model =
+      data.model ||
+      "deepseek-chat";
 
-    reportCache.set(cacheKey, {
-      report,
-      model,
-      cachedAt: Date.now(),
-    });
+    reportCache.set(
+      cacheKey,
+      {
+        report,
+        model,
+
+        cachedAt:
+          Date.now(),
+      }
+    );
 
     return NextResponse.json({
       report,
       model,
-      cached: false,
-      language: selectedLanguage,
-      usingProxy: Boolean(proxyUrl),
+
+      cached:
+        false,
+
+      language:
+        selectedLanguage,
+
+      usingProxy:
+        Boolean(
+          proxyUrl
+        ),
     });
-  } catch (error) {
-    console.error("DeepSeek investigation error:", error);
+  } catch (
+    error
+  ) {
+    console.error(
+      "DeepSeek investigation error:",
+      error
+    );
 
     return NextResponse.json(
       {
-        error: "Failed to generate AI investigation",
-        details: String(error),
+        error:
+          "Failed to generate AI investigation",
+
+        details:
+          String(
+            error
+          ),
       },
       {
-        status: 500,
+        status:
+          500,
       }
     );
   }
