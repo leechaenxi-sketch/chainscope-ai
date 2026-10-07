@@ -313,7 +313,74 @@ function CauseCard({ cause, language, confidenceLabel, levels }: any) {
   const title = language === "zh" ? cause.titleZh : cause.titleEn;
   const evidence = language === "zh" ? cause.evidenceZh : cause.evidenceEn;
   const explanation = language === "zh" ? cause.explanationZh : cause.explanationEn;
-  return <div className="rounded-xl border border-white/[0.06] bg-black/[0.1] p-5"><div className="flex items-start justify-between gap-3"><div className="font-medium">{title}</div><div className="rounded-md bg-white/[0.05] px-2 py-1 text-[10px] text-slate-400">{confidenceLabel}: {levels[cause.confidence]}</div></div><div className="mt-4 space-y-2">{evidence.map((item: string, index: number) => <div key={index} className="flex gap-2 text-xs text-slate-400"><span className="text-emerald-400">✓</span>{item}</div>)}</div><p className="mt-4 text-xs leading-6 text-slate-500">{explanation}</p></div>;
+
+  const verificationEvidence =
+    language === "zh"
+      ? cause.verification?.evidenceZh
+      : cause.verification?.evidenceEn;
+
+  const status = cause.verification?.status;
+
+  const verificationLabel =
+    status === "SUPPORTED"
+      ? language === "zh"
+        ? "验证：已获得额外支持"
+        : "Validation: Additional support"
+      : status === "PARTIAL"
+      ? language === "zh"
+        ? "验证：部分支持"
+        : "Validation: Partial support"
+      : language === "zh"
+      ? "验证：仍待确认"
+      : "Validation: Unresolved";
+
+  const verificationClass =
+    status === "SUPPORTED"
+      ? "border-emerald-400/20 bg-emerald-400/[0.04]"
+      : status === "PARTIAL"
+      ? "border-cyan-400/20 bg-cyan-400/[0.04]"
+      : "border-white/[0.06] bg-white/[0.02]";
+
+  return (
+    <div className="rounded-xl border border-white/[0.06] bg-black/[0.1] p-5">
+      <div className="flex items-start justify-between gap-3">
+        <div className="font-medium">{title}</div>
+
+        <div className="rounded-md bg-white/[0.05] px-2 py-1 text-[10px] text-slate-400">
+          {confidenceLabel}: {levels[cause.confidence]}
+        </div>
+      </div>
+
+      <div className="mt-4 space-y-2">
+        {evidence.map((item: string, index: number) => (
+          <div key={index} className="flex gap-2 text-xs text-slate-400">
+            <span className="text-emerald-400">✓</span>
+            {item}
+          </div>
+        ))}
+      </div>
+
+      <p className="mt-4 text-xs leading-6 text-slate-500">
+        {explanation}
+      </p>
+
+      {cause.verification && (
+        <div className={`mt-5 rounded-lg border p-3 ${verificationClass}`}>
+          <div className="text-[11px] font-semibold text-slate-300">
+            {verificationLabel}
+          </div>
+
+          <div className="mt-2 space-y-1.5">
+            {verificationEvidence?.map((item: string, index: number) => (
+              <div key={index} className="text-[11px] leading-5 text-slate-500">
+                • {item}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }
 function ImpactCard({ impact, language }: any) {
   return <div className="rounded-xl border border-white/[0.06] bg-black/[0.1] p-5"><div className="text-[10px] uppercase tracking-[0.16em] text-cyan-400">{language === "zh" ? impact.categoryZh : impact.categoryEn}</div><div className="mt-2 font-medium">{language === "zh" ? impact.titleZh : impact.titleEn}</div><p className="mt-3 text-sm leading-6 text-slate-500">{language === "zh" ? impact.descriptionZh : impact.descriptionEn}</p></div>;

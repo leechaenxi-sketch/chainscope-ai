@@ -1,5 +1,4 @@
 export type Language = "zh" | "en";
-export type Tab = "overview" | "trace" | "report" | "evidence";
 
 export type Transaction = {
   hash: string;
@@ -59,6 +58,19 @@ export type Counterparty = {
   lastTimestamp: number;
 };
 
+export type AddressContext = {
+  address: string;
+  isContract: boolean;
+  contractName?: string;
+  sourceVerified?: boolean;
+};
+
+export type CauseVerification = {
+  status: "SUPPORTED" | "PARTIAL" | "UNRESOLVED";
+  evidenceZh: string[];
+  evidenceEn: string[];
+};
+
 export type SecondHopResult = {
   investigatedAddress: string;
   selectionReason: string;
@@ -94,6 +106,7 @@ export type CauseHypothesis = {
   evidenceEn: string[];
   explanationZh: string;
   explanationEn: string;
+  verification?: CauseVerification;
 };
 
 export type ImpactItem = {
@@ -116,3 +129,5 @@ export type ChangeAnalysis = {
   summaryZh: string;
   summaryEn: string;
 };
+
+export type Tab = "overview" | "trace" | "report" | "evidence";

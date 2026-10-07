@@ -17,7 +17,9 @@ import {
   getRiskLevel,
 } from "@/lib/analysis";
 import { formatEth, formatTime, formatTokenAmount } from "@/lib/format";
+import { applySimpleCauseVerification } from "@/lib/cause-verification";
 import type {
+  AddressContext,
   Anomaly,
   ChangeAnalysis,
   Counterparty,
@@ -162,14 +164,70 @@ export default function Home() {
       setRiskScore(score);
       const riskLevel = getRiskLevel(score, language).label;
 
-      setStatus(language === "zh" ? "正在比较近期行为与基准行为..." : "Comparing recent behavior with baseline behavior...");
-      const changeResult = analyzeBehaviorChange(
+      setStatus(
+        language === "zh"
+          ? "正在比较近期行为与基准行为..."
+          : "Comparing recent behavior with baseline behavior..."
+      );
+
+      const rawChangeResult = analyzeBehaviorChange(
         txItems,
         tokenItems,
         internalItems,
         firstHopCounterparties,
         rootAddress
       );
+
+      setStatus(
+        language === "zh"
+          ? "正在简单验证原因假设..."
+          : "Validating cause hypotheses..."
+      );
+
+      let addressContexts: AddressContext[] = [];
+
+      const contextAddresses = firstHopCounterparties
+        .slice(0, 5)
+        .map((item) => item.address);
+
+      if (contextAddresses.length > 0) {
+        try {
+          const contextResponse = await fetch(
+            "/api/address-context",
+            {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({
+                addresses: contextAddresses,
+              }),
+            }
+          );
+
+          const contextData = await contextResponse.json();
+
+          if (
+            contextResponse.ok &&
+            Array.isArray(contextData.items)
+          ) {
+            addressContexts = contextData.items;
+          }
+        } catch (error) {
+          console.error(
+            "address-context verification:",
+            error
+          );
+        }
+      }
+
+      const changeResult =
+        applySimpleCauseVerification(
+          rawChangeResult,
+          addressContexts,
+          firstHopCounterparties
+        );
+
       setChangeAnalysis(changeResult);
 
       let secondHopResult: SecondHopResult | null = null;
@@ -317,6 +375,7 @@ export default function Home() {
             language,
             anomalies: detected,
             changeAnalysis: changeResult,
+            addressContexts,
             transactions: evidenceTransactions,
             tokenTransfers: evidenceTokens,
             internalTransactions: evidenceInternal,
