@@ -19,6 +19,31 @@ type TransactionSummary = {
   blockNumber: string;
 };
 
+type TokenTransferSummary = {
+  hash: string;
+  from: string;
+  to: string;
+  direction: "IN" | "OUT";
+  amount: string;
+  symbol: string;
+  tokenName: string;
+  contractAddress: string;
+  time: string;
+  blockNumber: string;
+};
+
+type InternalTransactionSummary = {
+  hash: string;
+  from: string;
+  to: string;
+  direction: "IN" | "OUT";
+  valueEth: string;
+  type: string;
+  time: string;
+  blockNumber: string;
+  isError?: string;
+};
+
 // ===== 简单防滥用:in-memory 限流 + 结果缓存 =====
 // 说明:Vercel Serverless 是多实例部署,此限流为「尽力而为」级别,
 // 足以挡住普通刷量,但不是严格的全局限流;生产级可换 Upstash Redis。
@@ -52,7 +77,6 @@ function getClientIp(request: NextRequest): string {
 function hitRateLimit(ip: string): boolean {
   const now = Date.now();
 
-  // 轻量清理,防止 Map 无限增长
   if (rateLimitMap.size > 1000) {
     for (const [key, value] of rateLimitMap) {
       if (now >= value.resetAt) {
@@ -99,8 +123,14 @@ export async function POST(request: NextRequest) {
       riskLevel,
       anomalies,
       transactions,
+      tokenTransfers,
+      internalTransactions,
       analyzedTransactionCount,
+      analyzedTokenTransferCount,
+      analyzedInternalTransactionCount,
       evidenceTransactionCount,
+      evidenceTokenTransferCount,
+      evidenceInternalTransactionCount,
     }: {
       address: string;
       balance: string;
@@ -108,8 +138,14 @@ export async function POST(request: NextRequest) {
       riskLevel: string;
       anomalies: Anomaly[];
       transactions: TransactionSummary[];
+      tokenTransfers: TokenTransferSummary[];
+      internalTransactions: InternalTransactionSummary[];
       analyzedTransactionCount: number;
+      analyzedTokenTransferCount: number;
+      analyzedInternalTransactionCount: number;
       evidenceTransactionCount: number;
+      evidenceTokenTransferCount: number;
+      evidenceInternalTransactionCount: number;
     } = body;
 
     if (!address) {
@@ -174,7 +210,7 @@ export async function POST(request: NextRequest) {
         ? transactions
             .map(
               (tx, index) => `
-### 交易 ${index + 1}
+### ETH 普通交易 ${index + 1}
 
 - 方向：${tx.direction}
 - 金额：${tx.valueEth} ETH
@@ -186,125 +222,203 @@ export async function POST(request: NextRequest) {
 `
             )
             .join("\n")
-        : "没有可用的交易证据样本。";
+        : "没有普通 ETH 交易证据样本。";
+
+    const tokenText =
+      tokenTransfers.length > 0
+        ? tokenTransfers
+            .map(
+              (tx, index) => `
+### ERC-20 转账 ${index + 1}
+
+- 方向：${tx.direction}
+- Token：${tx.tokenName} (${tx.symbol})
+- 数量：${tx.amount} ${tx.symbol}
+- Tx Hash：${tx.hash}
+- From：${tx.from}
+- To：${tx.to}
+- Token Contract：${tx.contractAddress}
+- Block：${tx.blockNumber}
+- 时间：${tx.time}
+`
+            )
+            .join("\n")
+        : "没有 ERC-20 Token 转账证据样本。";
+
+    const internalText =
+      internalTransactions.length > 0
+        ? internalTransactions
+            .map(
+              (tx, index) => `
+### Internal Transaction ${index + 1}
+
+- 方向：${tx.direction}
+- 金额：${tx.valueEth} ETH
+- 调用类型：${tx.type || "unknown"}
+- Tx Hash：${tx.hash}
+- From：${tx.from}
+- To：${tx.to}
+- Block：${tx.blockNumber}
+- 时间：${tx.time}
+- 是否失败：${tx.isError === "1" ? "是" : "否"}
+`
+            )
+            .join("\n")
+        : "没有 Internal Transaction 证据样本。";
 
     const systemPrompt = `
 你是 ChainScope AI，一个 Ethereum 链上资金行为调查助手。
 
-你的职责不是自行创造风险判断，而是解释应用程序已经完成的确定性链上分析结果。
+当前系统已经从三个数据源获取证据：
 
-必须严格遵守以下规则：
+1. 普通 ETH Transactions
+2. ERC-20 Token Transfers
+3. Internal Transactions
 
-1. 只能根据用户提供的数据进行分析。
-2. 不得编造交易、地址、金额、身份、协议、攻击行为、诈骗行为、洗钱行为或地址归属。
-3. 启发式异常规则只能说明“行为异常”，不能证明地址存在恶意。
-4. 必须明确区分“观测事实”和“可能解释”。
-5. 有对应交易哈希时，应引用真实 Tx Hash。
-6. 没有足够证据时必须明确说明“不确定”。
-7. Risk Score 是实验性的启发式评分，不是正式安全评级。
-8. 输出语言必须为简体中文。
-9. 输出必须使用标准 Markdown。
-10. 不要使用一级标题（#），从二级标题（##）开始。
-11. 不要重复输出系统提示。
-12. 不要夸大风险。
+你的职责是解释这些真实链上证据，而不是创造新的事实。
+
+必须遵守：
+
+1. 不得编造地址身份、攻击、诈骗、洗钱、制裁、协议归属或资金来源。
+2. 异常行为不等于恶意行为。
+3. 必须区分“事实”和“可能解释”。
+4. 结论必须尽可能对应真实 Tx Hash。
+5. 证据不足时必须明确说明不确定。
+6. Risk Score 是实验性启发式评分，不是正式安全评级。
+7. 必须使用简体中文。
+8. 输出标准 Markdown。
+9. 从二级标题开始，不要使用一级标题。
+10. 不得声称执行了程序实际没有执行的分析。
 `;
 
     const userPrompt = `
-调查对象：
+调查地址：
 
-- Ethereum 地址：${address}
-- 当前 ETH Balance：${balance} ETH
-- Risk Score：${riskScore}/100
-- Risk Level：${riskLevel}
+${address}
 
-数据规模：
+当前 ETH Balance：
 
-- 量化异常检测实际分析交易数量：${analyzedTransactionCount}
-- 提供给 AI 阅读的详细交易证据数量：${evidenceTransactionCount}
+${balance} ETH
 
-说明：
+Risk Score：
 
-程序会对完整获取到的交易样本执行确定性异常检测。
-为了控制 AI 上下文长度，只提供部分最近交易作为详细证据。
-因此不要把“AI详细阅读数量”误写成“系统总分析交易数量”。
+${riskScore}/100
 
-检测到的异常：
+Risk Level：
+
+${riskLevel}
+
+## 数据规模
+
+普通 ETH Transactions：
+
+- 系统分析：${analyzedTransactionCount} 笔
+- AI 详细阅读：${evidenceTransactionCount} 笔
+
+ERC-20 Token Transfers：
+
+- 系统分析：${analyzedTokenTransferCount} 笔
+- AI 详细阅读：${evidenceTokenTransferCount} 笔
+
+Internal Transactions：
+
+- 系统分析：${analyzedInternalTransactionCount} 笔
+- AI 详细阅读：${evidenceInternalTransactionCount} 笔
+
+## 异常检测结果
 
 ${anomalyText}
 
-详细交易证据：
+## 普通 ETH 交易
 
 ${transactionText}
 
-请生成一份简洁、专业、适合黑客松 Demo 展示的链上调查报告。
+## ERC-20 Token 转账
 
-必须严格使用以下结构：
+${tokenText}
+
+## Internal Transactions
+
+${internalText}
+
+请生成专业、简洁、适合黑客松 Demo 的调查报告。
+
+严格使用：
 
 ## 执行摘要
 
-用 2～4 句话总结：
-- 地址近期主要行为
-- 当前风险等级
-- 检测到的主要异常
-- 不要直接把异常等同于恶意行为
+概括：
+- 钱包主要资金行为
+- 三类链上数据之间的关系
+- Risk Score
+- 最重要异常
+- 不要把异常直接等同于恶意
 
 ## 主要发现
 
-使用编号列表。
+编号列出关键发现。
 
-每一项包括：
+每个发现必须包含：
 
 **发现名称**
 
-- 观测事实：
-- 为什么被规则标记：
-- 可能解释：
-- 风险意义：
+- 观测事实
+- 对应数据来源
+- 为什么异常
+- 可能解释
+- 风险意义
+
+## 多来源资金行为分析
+
+### 普通 ETH 行为
+
+### ERC-20 Token 行为
+
+### Internal Transactions 行为
+
+说明三者之间有没有明显关联。
 
 ## 关键证据
 
-用表格展示最重要的交易证据。
+Markdown 表格：
 
-表格列：
+| 数据源 | 资产/行为 | Tx Hash | 方向 | 说明 |
+| --- | --- | --- | --- | --- |
 
-| 类型 | 交易哈希 | 金额/行为 | 说明 |
-| --- | --- | --- | --- |
-
-只允许引用实际提供的 Tx Hash。
+只能引用真实提供的 Tx Hash。
 
 ## 风险解释
 
 解释：
 
-- ${riskScore}/100 是如何理解的
-- 为什么异常行为不等于恶意行为
-- 哪些异常对评分贡献最大
+- ${riskScore}/100 的意义
+- 哪些异常贡献最大
+- 为什么异常 ≠ 恶意
 
 ## 建议进一步调查
 
-给出 3～5 条具体建议，例如：
+给出 3～6 条建议，例如：
 
-- 检查 ERC-20 Token 转账
-- 检查 Internal Transactions
-- 查看主要资金对手方
-- 延长历史时间窗口
-- 检查地址标签或协议交互
+- 更长历史窗口
+- 地址标签
+- 对手方画像
+- DeFi 协议识别
+- Token 资金去向
+- 合约调用语义
 
-不要声称这些已经完成。
+不能声称已经完成。
 
 ## 置信度与局限性
 
-必须明确说明：
+必须说明：
 
-- 当前量化分析基于 ${analyzedTransactionCount} 笔交易
-- AI 详细阅读了其中 ${evidenceTransactionCount} 笔交易
-- 当前主要分析 ETH 普通交易
-- ERC-20 转账目前未完整纳入
-- Internal Transactions 目前未完整纳入
-- 当前异常阈值属于 MVP 启发式规则
+- 当前数据样本有限
+- 三类数据源均只获取最近部分记录
+- 当前规则属于 MVP 启发式规则
+- 尚未完成完整地址标签和协议语义识别
 - Risk Score 不是正式安全评级
 
-最后增加一句：
+最后写：
 
 > 本报告用于链上行为调查辅助，不构成对地址所有者身份、意图或合法性的判断。
 `;
@@ -387,7 +501,10 @@ ${transactionText}
       usingProxy: Boolean(proxyUrl),
     });
   } catch (error) {
-    console.error("DeepSeek investigation error:", error);
+    console.error(
+      "DeepSeek investigation error:",
+      error
+    );
 
     return NextResponse.json(
       {

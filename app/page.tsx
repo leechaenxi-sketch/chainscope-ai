@@ -18,6 +18,33 @@ type Transaction = {
   gasPrice?: string;
 };
 
+type TokenTransfer = {
+  hash: string;
+  from: string;
+  to: string;
+  value: string;
+  blockNumber: string;
+  timeStamp: string;
+  tokenName: string;
+  tokenSymbol: string;
+  tokenDecimal: string;
+  contractAddress: string;
+};
+
+type InternalTransaction = {
+  hash: string;
+  from: string;
+  to: string;
+  value: string;
+  blockNumber: string;
+  timeStamp: string;
+  type?: string;
+  isError?: string;
+  contractAddress?: string;
+  gas?: string;
+  gasUsed?: string;
+};
+
 type Anomaly = {
   type: string;
   severity: "LOW" | "MEDIUM" | "HIGH";
@@ -36,6 +63,12 @@ export default function Home() {
   const [transactions, setTransactions] =
     useState<Transaction[]>([]);
 
+  const [tokenTransfers, setTokenTransfers] =
+    useState<TokenTransfer[]>([]);
+
+  const [internalTransactions, setInternalTransactions] =
+    useState<InternalTransaction[]>([]);
+
   const [anomalies, setAnomalies] =
     useState<Anomaly[]>([]);
 
@@ -48,24 +81,21 @@ export default function Home() {
   async function startInvestigation() {
     if (!ethers.isAddress(address)) {
       setStatus("Please enter a valid Ethereum address.");
-      setBalance("--");
-      setTransactions([]);
-      setAnomalies([]);
-      setRiskScore(null);
-      setAiReport("");
       return;
     }
 
     try {
       setLoading(true);
       setAiLoading(false);
-      setAiReport("");
-
-      setStatus("Fetching Ethereum data...");
 
       setTransactions([]);
+      setTokenTransfers([]);
+      setInternalTransactions([]);
       setAnomalies([]);
       setRiskScore(null);
+      setAiReport("");
+
+      setStatus("Fetching Ethereum balance...");
 
       const provider =
         new ethers.JsonRpcProvider(
@@ -83,41 +113,104 @@ export default function Home() {
 
       setBalance(formattedBalance);
 
-      setStatus(
-        "Fetching recent transactions..."
+      setStatus("Fetching ETH transactions...");
+
+      const txResponse = await fetch(
+        `/api/transactions?address=${encodeURIComponent(address)}`
       );
 
-      const response = await fetch(
-        `/api/transactions?address=${encodeURIComponent(
+      const txData =
+        await txResponse.json();
+
+      if (!txResponse.ok) {
+        throw new Error(
+          txData.error ||
+            "Failed to retrieve ETH transactions"
+        );
+      }
+
+      const txItems: Transaction[] =
+        Array.isArray(txData.items)
+          ? txData.items
+          : [];
+
+      setTransactions(txItems);
+
+      setStatus("Fetching ERC-20 token transfers...");
+
+      const tokenResponse = await fetch(
+        `/api/tokentx?address=${encodeURIComponent(address)}`
+      );
+
+      const tokenData =
+        await tokenResponse.json();
+
+      if (!tokenResponse.ok) {
+        throw new Error(
+          tokenData.error ||
+            "Failed to retrieve token transfers"
+        );
+      }
+
+      const tokenItems: TokenTransfer[] =
+        Array.isArray(tokenData.items)
+          ? tokenData.items
+          : [];
+
+      setTokenTransfers(tokenItems);
+
+      setStatus("Fetching internal transactions...");
+
+      const internalResponse = await fetch(
+        `/api/internal-transactions?address=${encodeURIComponent(
           address
         )}`
       );
 
-      const data = await response.json();
+      const internalData =
+        await internalResponse.json();
 
-      if (!response.ok) {
+      if (!internalResponse.ok) {
         throw new Error(
-          data.error ||
-            "Failed to retrieve transactions"
+          internalData.error ||
+            "Failed to retrieve internal transactions"
         );
       }
 
-      const items: Transaction[] =
-        Array.isArray(data.items)
-          ? data.items
+      const internalItems: InternalTransaction[] =
+        Array.isArray(internalData.items)
+          ? internalData.items
           : [];
 
-      setTransactions(items);
+      setInternalTransactions(internalItems);
 
       setStatus(
-        "Detecting abnormal behavior..."
+        "Running multi-source anomaly detection..."
       );
 
-      const detected =
-        detectAnomalies(
-          items,
+      const ethAnomalies =
+        detectEthAnomalies(
+          txItems,
           address
         );
+
+      const tokenAnomalies =
+        detectTokenAnomalies(
+          tokenItems,
+          address
+        );
+
+      const internalAnomalies =
+        detectInternalAnomalies(
+          internalItems,
+          address
+        );
+
+      const detected = [
+        ...ethAnomalies,
+        ...tokenAnomalies,
+        ...internalAnomalies,
+      ];
 
       setAnomalies(detected);
 
@@ -136,7 +229,7 @@ export default function Home() {
       setAiLoading(true);
 
       const evidenceTransactions =
-        items
+        txItems
           .slice(0, 20)
           .map((tx) => {
             const outgoing =
@@ -147,62 +240,110 @@ export default function Home() {
               hash: tx.hash,
               from: tx.from,
               to: tx.to,
+              valueEth: formatEth(tx.value),
+              time: formatTime(tx.timeStamp),
+              direction: outgoing ? "OUT" : "IN",
+              blockNumber: tx.blockNumber,
+            };
+          });
 
-              valueEth:
-                formatEth(
-                  tx.value
-                ),
+      const evidenceTokens =
+        tokenItems
+          .slice(0, 20)
+          .map((tx) => {
+            const outgoing =
+              tx.from?.toLowerCase() ===
+              address.toLowerCase();
 
-              time:
-                formatTime(
-                  tx.timeStamp
-                ),
+            return {
+              hash: tx.hash,
+              from: tx.from,
+              to: tx.to,
+              direction: outgoing ? "OUT" : "IN",
+              amount: formatTokenAmount(
+                tx.value,
+                tx.tokenDecimal
+              ),
+              symbol:
+                tx.tokenSymbol || "TOKEN",
+              tokenName:
+                tx.tokenName || "Unknown Token",
+              contractAddress:
+                tx.contractAddress,
+              time: formatTime(tx.timeStamp),
+              blockNumber: tx.blockNumber,
+            };
+          });
 
-              direction:
-                outgoing
-                  ? "OUT"
-                  : "IN",
+      const evidenceInternal =
+        internalItems
+          .slice(0, 20)
+          .map((tx) => {
+            const outgoing =
+              tx.from?.toLowerCase() ===
+              address.toLowerCase();
 
-              blockNumber:
-                tx.blockNumber,
+            return {
+              hash: tx.hash,
+              from: tx.from,
+              to: tx.to,
+              direction: outgoing ? "OUT" : "IN",
+              valueEth: formatEth(tx.value),
+              type: tx.type || "unknown",
+              time: formatTime(tx.timeStamp),
+              blockNumber: tx.blockNumber,
+              isError: tx.isError,
             };
           });
 
       try {
-        const aiResponse = await fetch(
-          "/api/investigate",
-          {
-            method: "POST",
+        const aiResponse =
+          await fetch(
+            "/api/investigate",
+            {
+              method: "POST",
+              headers: {
+                "Content-Type":
+                  "application/json",
+              },
 
-            headers: {
-              "Content-Type":
-                "application/json",
-            },
+              body: JSON.stringify({
+                address,
+                balance: formattedBalance,
+                riskScore: score,
+                riskLevel,
 
-            body: JSON.stringify({
-              address,
-              balance:
-                formattedBalance,
+                anomalies: detected,
 
-              riskScore:
-                score,
+                transactions:
+                  evidenceTransactions,
 
-              riskLevel,
+                tokenTransfers:
+                  evidenceTokens,
 
-              anomalies:
-                detected,
+                internalTransactions:
+                  evidenceInternal,
 
-              transactions:
-                evidenceTransactions,
+                analyzedTransactionCount:
+                  txItems.length,
 
-              analyzedTransactionCount:
-                items.length,
+                analyzedTokenTransferCount:
+                  tokenItems.length,
 
-              evidenceTransactionCount:
-                evidenceTransactions.length,
-            }),
-          }
-        );
+                analyzedInternalTransactionCount:
+                  internalItems.length,
+
+                evidenceTransactionCount:
+                  evidenceTransactions.length,
+
+                evidenceTokenTransferCount:
+                  evidenceTokens.length,
+
+                evidenceInternalTransactionCount:
+                  evidenceInternal.length,
+              }),
+            }
+          );
 
         const aiData =
           await aiResponse.json();
@@ -217,22 +358,22 @@ export default function Home() {
         setAiReport(
           aiData.report || ""
         );
-      } catch (aiError) {
-        console.error(aiError);
+      } catch (error) {
+        console.error(error);
 
         setAiReport(
           `## AI 调查报告生成失败
 
-确定性链上分析已经完成，但 DeepSeek 调查报告暂时无法生成。
+确定性链上分析已经完成，但 DeepSeek 暂时无法生成调查报告。
 
-你仍然可以查看下面的异常检测结果和交易证据。`
+你仍然可以查看下面的异常检测和三类链上证据。`
         );
       } finally {
         setAiLoading(false);
       }
 
       setStatus(
-        `Analysis complete. Retrieved ${items.length} transactions and detected ${detected.length} anomalies.`
+        `Analysis complete. ${txItems.length} ETH transactions, ${tokenItems.length} token transfers, ${internalItems.length} internal transactions and ${detected.length} anomalies analyzed.`
       );
     } catch (error) {
       console.error(error);
@@ -240,20 +381,20 @@ export default function Home() {
       setStatus(
         error instanceof Error
           ? error.message
-          : "Failed to retrieve Ethereum data."
+          : "Investigation failed."
       );
     } finally {
       setLoading(false);
     }
   }
 
-  function detectAnomalies(
+  function detectEthAnomalies(
     txs: Transaction[],
     targetAddress: string
   ): Anomaly[] {
     const results: Anomaly[] = [];
 
-    if (txs.length === 0) {
+    if (!txs.length) {
       return results;
     }
 
@@ -263,7 +404,6 @@ export default function Home() {
     const parsed = txs
       .map((tx) => {
         let ethValue = 0;
-        let feeEth = 0;
 
         try {
           ethValue = Number(
@@ -271,47 +411,13 @@ export default function Home() {
               tx.value || "0"
             )
           );
-        } catch {
-          ethValue = 0;
-        }
-
-        try {
-          const gasUsed =
-            BigInt(
-              tx.gasUsed || "0"
-            );
-
-          const gasPrice =
-            BigInt(
-              tx.gasPrice || "0"
-            );
-
-          feeEth = Number(
-            ethers.formatEther(
-              gasUsed * gasPrice
-            )
-          );
-        } catch {
-          feeEth = 0;
-        }
+        } catch {}
 
         return {
           ...tx,
           ethValue,
-          feeEth,
-
           timestamp:
-            Number(
-              tx.timeStamp
-            ),
-
-          fromLower:
-            tx.from?.toLowerCase() ||
-            "",
-
-          toLower:
-            tx.to?.toLowerCase() ||
-            "",
+            Number(tx.timeStamp),
 
           isOutgoing:
             tx.from?.toLowerCase() ===
@@ -345,153 +451,496 @@ export default function Home() {
           tx.ethValue > 0
       );
 
-    const outgoingValues =
-      outgoing.map(
-        (tx) =>
-          tx.ethValue
-      );
-
     const avgOutgoing =
-      outgoingValues.length > 0
-        ? outgoingValues.reduce(
-            (sum, value) =>
-              sum + value,
+      outgoing.length
+        ? outgoing.reduce(
+            (sum, tx) =>
+              sum +
+              tx.ethValue,
             0
           ) /
-          outgoingValues.length
+          outgoing.length
         : 0;
 
-    // 1. 单笔大额交易
-
-    const largeTransfers =
-      outgoing.filter((tx) => {
-        if (
-          avgOutgoing <= 0
-        ) {
-          return false;
-        }
-
-        return (
+    const large =
+      outgoing.filter(
+        (tx) =>
+          avgOutgoing > 0 &&
           tx.ethValue >=
             avgOutgoing * 3 &&
-          tx.ethValue >= 0.1
-        );
-      });
+          tx.ethValue >=
+            0.1
+      );
 
-    if (
-      largeTransfers.length >
-      0
-    ) {
-      const largestTx =
-        largeTransfers.reduce(
-          (max, tx) =>
-            tx.ethValue >
-            max.ethValue
-              ? tx
-              : max,
-          largeTransfers[0]
+    if (large.length) {
+      const biggest =
+        large.reduce(
+          (a, b) =>
+            a.ethValue >
+            b.ethValue
+              ? a
+              : b
         );
-
-      const high =
-        largestTx.ethValue >=
-        avgOutgoing * 8;
 
       results.push({
         type:
-          "Large Transfer",
+          "Large ETH Transfer",
 
-        severity: high
-          ? "HIGH"
-          : "MEDIUM",
+        severity:
+          biggest.ethValue >=
+          avgOutgoing * 8
+            ? "HIGH"
+            : "MEDIUM",
 
         description:
-          `${largeTransfers.length} unusually large outgoing transaction(s) detected. ` +
-          `Largest transfer: ${largestTx.ethValue.toFixed(
+          `${biggest.ethValue.toFixed(
             4
-          )} ETH. ` +
-          `Recent outgoing average: ${avgOutgoing.toFixed(
+          )} ETH transfer was significantly larger than the recent outgoing average of ${avgOutgoing.toFixed(
             4
           )} ETH.`,
 
         score:
-          high ? 20 : 12,
+          biggest.ethValue >=
+          avgOutgoing * 8
+            ? 18
+            : 10,
 
         evidenceHash:
-          largestTx.hash,
+          biggest.hash,
       });
     }
 
-    // 2. 一小时累计转出激增
-
-    let maxHourlyOutflow = 0;
-    let hourlyEvidence = "";
+    let max10m = 0;
+    let evidence = "";
 
     for (
       let i = 0;
-      i < outgoing.length;
+      i < parsed.length;
       i++
     ) {
-      let total = 0;
+      let count = 0;
 
       for (
         let j = i;
-        j < outgoing.length;
+        j < parsed.length;
         j++
       ) {
         if (
-          outgoing[j]
-            .timestamp -
-            outgoing[i]
-              .timestamp <=
-          3600
+          parsed[j].timestamp -
+            parsed[i].timestamp <=
+          600
         ) {
-          total +=
-            outgoing[j]
-              .ethValue;
+          count++;
+        } else {
+          break;
+        }
+      }
+
+      if (count > max10m) {
+        max10m = count;
+        evidence =
+          parsed[i].hash;
+      }
+    }
+
+    if (max10m >= 8) {
+      results.push({
+        type:
+          "ETH Transaction Frequency Spike",
+
+        severity:
+          max10m >= 15
+            ? "HIGH"
+            : "MEDIUM",
+
+        description:
+          `${max10m} normal Ethereum transactions occurred within a 10-minute window.`,
+
+        score:
+          max10m >= 15
+            ? 14
+            : 8,
+
+        evidenceHash:
+          evidence,
+      });
+    }
+
+    for (
+      const received of incoming
+    ) {
+      let outgoingSoon = 0;
+      let evidenceHash = "";
+
+      for (
+        const sent of outgoing
+      ) {
+        const delay =
+          sent.timestamp -
+          received.timestamp;
+
+        if (
+          delay >= 0 &&
+          delay <= 1800
+        ) {
+          outgoingSoon +=
+            sent.ethValue;
+
+          if (!evidenceHash) {
+            evidenceHash =
+              sent.hash;
+          }
+        }
+      }
+
+      if (
+        received.ethValue >=
+          0.1 &&
+        outgoingSoon >=
+          received.ethValue *
+            0.7
+      ) {
+        results.push({
+          type:
+            "Rapid ETH Outflow",
+
+          severity: "HIGH",
+
+          description:
+            `After receiving ${received.ethValue.toFixed(
+              4
+            )} ETH, approximately ${outgoingSoon.toFixed(
+              4
+            )} ETH was sent out within 30 minutes.`,
+
+          score: 18,
+
+          evidenceHash:
+            evidenceHash,
+        });
+
+        break;
+      }
+    }
+
+    return results;
+  }
+
+  function detectTokenAnomalies(
+    transfers: TokenTransfer[],
+    targetAddress: string
+  ): Anomaly[] {
+    const results: Anomaly[] = [];
+
+    if (!transfers.length) {
+      return results;
+    }
+
+    const target =
+      targetAddress.toLowerCase();
+
+    const parsed =
+      transfers
+        .map((tx) => ({
+          ...tx,
+
+          amount:
+            Number(
+              formatTokenAmount(
+                tx.value,
+                tx.tokenDecimal
+              )
+            ),
+
+          timestamp:
+            Number(
+              tx.timeStamp
+            ),
+
+          isOutgoing:
+            tx.from
+              ?.toLowerCase() ===
+            target,
+        }))
+        .sort(
+          (a, b) =>
+            a.timestamp -
+            b.timestamp
+        );
+
+    const outgoing =
+      parsed.filter(
+        (tx) =>
+          tx.isOutgoing &&
+          tx.amount > 0
+      );
+
+    const byToken =
+      new Map<
+        string,
+        typeof outgoing
+      >();
+
+    for (
+      const tx of outgoing
+    ) {
+      const key =
+        tx.contractAddress
+          ?.toLowerCase() ||
+        tx.tokenSymbol;
+
+      const group =
+        byToken.get(key) ||
+        [];
+
+      group.push(tx);
+
+      byToken.set(
+        key,
+        group
+      );
+    }
+
+    for (
+      const [, group]
+      of byToken
+    ) {
+      if (
+        group.length < 3
+      ) {
+        continue;
+      }
+
+      const average =
+        group.reduce(
+          (sum, tx) =>
+            sum +
+            tx.amount,
+          0
+        ) /
+        group.length;
+
+      const biggest =
+        group.reduce(
+          (a, b) =>
+            a.amount >
+            b.amount
+              ? a
+              : b
+        );
+
+      if (
+        average > 0 &&
+        biggest.amount >=
+          average * 3
+      ) {
+        results.push({
+          type:
+            "Large ERC-20 Transfer",
+
+          severity:
+            biggest.amount >=
+            average * 8
+              ? "HIGH"
+              : "MEDIUM",
+
+          description:
+            `${biggest.amount.toLocaleString()} ${biggest.tokenSymbol} was significantly larger than the recent transfer average for this token.`,
+
+          score:
+            biggest.amount >=
+            average * 8
+              ? 16
+              : 9,
+
+          evidenceHash:
+            biggest.hash,
+        });
+
+        break;
+      }
+    }
+
+    let max10m = 0;
+    let evidenceHash = "";
+
+    for (
+      let i = 0;
+      i < parsed.length;
+      i++
+    ) {
+      let count = 0;
+
+      for (
+        let j = i;
+        j < parsed.length;
+        j++
+      ) {
+        if (
+          parsed[j].timestamp -
+            parsed[i].timestamp <=
+          600
+        ) {
+          count++;
         } else {
           break;
         }
       }
 
       if (
-        total >
-        maxHourlyOutflow
+        count >
+        max10m
       ) {
-        maxHourlyOutflow =
-          total;
+        max10m =
+          count;
 
-        hourlyEvidence =
-          outgoing[i].hash;
+        evidenceHash =
+          parsed[i].hash;
       }
     }
 
-    if (
-      avgOutgoing > 0 &&
-      maxHourlyOutflow >=
-        avgOutgoing * 5
-    ) {
+    if (max10m >= 8) {
       results.push({
         type:
-          "Outflow Surge",
+          "ERC-20 Activity Spike",
 
-        severity: "HIGH",
+        severity:
+          max10m >= 15
+            ? "HIGH"
+            : "MEDIUM",
 
         description:
-          `A 1-hour window contained ${maxHourlyOutflow.toFixed(
-            4
-          )} ETH of outgoing transfers, far above the recent average transaction size.`,
+          `${max10m} ERC-20 transfer events occurred within a 10-minute window.`,
 
-        score: 18,
+        score:
+          max10m >= 15
+            ? 14
+            : 8,
 
-        evidenceHash:
-          hourlyEvidence,
+        evidenceHash,
       });
     }
 
-    // 3. 交易频率突增
+    return results;
+  }
 
-    let maxTx10m = 0;
-    let frequencyEvidence = "";
+  function detectInternalAnomalies(
+    items: InternalTransaction[],
+    targetAddress: string
+  ): Anomaly[] {
+    const results: Anomaly[] = [];
+
+    if (!items.length) {
+      return results;
+    }
+
+    const target =
+      targetAddress.toLowerCase();
+
+    const parsed =
+      items
+        .map((tx) => ({
+          ...tx,
+
+          ethValue:
+            Number(
+              formatEth(
+                tx.value
+              )
+            ),
+
+          timestamp:
+            Number(
+              tx.timeStamp
+            ),
+
+          isOutgoing:
+            tx.from
+              ?.toLowerCase() ===
+            target,
+
+          isIncoming:
+            tx.to
+              ?.toLowerCase() ===
+            target,
+        }))
+        .sort(
+          (a, b) =>
+            a.timestamp -
+            b.timestamp
+        );
+
+    const outgoing =
+      parsed.filter(
+        (tx) =>
+          tx.isOutgoing &&
+          tx.ethValue > 0
+      );
+
+    const incoming =
+      parsed.filter(
+        (tx) =>
+          tx.isIncoming &&
+          tx.ethValue > 0
+      );
+
+    const average =
+      outgoing.length
+        ? outgoing.reduce(
+            (sum, tx) =>
+              sum +
+              tx.ethValue,
+            0
+          ) /
+          outgoing.length
+        : 0;
+
+    if (
+      outgoing.length >= 3 &&
+      average > 0
+    ) {
+      const biggest =
+        outgoing.reduce(
+          (a, b) =>
+            a.ethValue >
+            b.ethValue
+              ? a
+              : b
+        );
+
+      if (
+        biggest.ethValue >=
+        average * 3
+      ) {
+        results.push({
+          type:
+            "Large Internal ETH Transfer",
+
+          severity:
+            biggest.ethValue >=
+            average * 8
+              ? "HIGH"
+              : "MEDIUM",
+
+          description:
+            `An internal transfer of ${biggest.ethValue.toFixed(
+              4
+            )} ETH was significantly larger than the recent internal outgoing average.`,
+
+          score:
+            biggest.ethValue >=
+            average * 8
+              ? 16
+              : 9,
+
+          evidenceHash:
+            biggest.hash,
+        });
+      }
+    }
+
+    let max10m = 0;
+    let evidence = "";
 
     for (
       let i = 0;
@@ -520,305 +969,44 @@ export default function Home() {
 
       if (
         count >
-        maxTx10m
+        max10m
       ) {
-        maxTx10m = count;
-        frequencyEvidence =
+        max10m = count;
+        evidence =
           parsed[i].hash;
       }
     }
 
     if (
-      maxTx10m >= 8
+      max10m >= 8
     ) {
-      const high =
-        maxTx10m >= 15;
-
       results.push({
         type:
-          "Transaction Frequency Spike",
+          "Internal Transaction Activity Spike",
 
-        severity: high
-          ? "HIGH"
-          : "MEDIUM",
+        severity:
+          max10m >= 15
+            ? "HIGH"
+            : "MEDIUM",
 
         description:
-          `Detected up to ${maxTx10m} transactions within a 10-minute window.`,
+          `${max10m} internal transactions occurred within a 10-minute window.`,
 
         score:
-          high ? 16 : 10,
+          max10m >= 15
+            ? 14
+            : 8,
 
         evidenceHash:
-          frequencyEvidence,
+          evidence,
       });
     }
-
-    // 4. 新收款方大额转账
-
-    const seenRecipients =
-      new Set<string>();
-
-    for (
-      const tx of outgoing
-    ) {
-      if (!tx.toLower) {
-        continue;
-      }
-
-      const newRecipient =
-        !seenRecipients.has(
-          tx.toLower
-        );
-
-      const large =
-        avgOutgoing > 0 &&
-        tx.ethValue >=
-          avgOutgoing * 3 &&
-        tx.ethValue >= 0.1;
-
-      if (
-        newRecipient &&
-        large
-      ) {
-        results.push({
-          type:
-            "Large Transfer to New Recipient",
-
-          severity: "HIGH",
-
-          description:
-            `A large transfer of ${tx.ethValue.toFixed(
-              4
-            )} ETH was sent to a recipient not previously observed in this transaction sample.`,
-
-          score: 16,
-
-          evidenceHash:
-            tx.hash,
-        });
-
-        break;
-      }
-
-      seenRecipients.add(
-        tx.toLower
-      );
-    }
-
-    // 5. 资金流集中
-
-    const recipientTotals =
-      new Map<
-        string,
-        number
-      >();
-
-    let totalOutgoing = 0;
-
-    for (
-      const tx of outgoing
-    ) {
-      if (!tx.toLower) {
-        continue;
-      }
-
-      totalOutgoing +=
-        tx.ethValue;
-
-      recipientTotals.set(
-        tx.toLower,
-        (recipientTotals.get(
-          tx.toLower
-        ) || 0) +
-          tx.ethValue
-      );
-    }
-
-    let largestRecipient =
-      "";
-
-    let largestTotal = 0;
-
-    for (
-      const [
-        recipient,
-        amount,
-      ] of recipientTotals
-    ) {
-      if (
-        amount >
-        largestTotal
-      ) {
-        largestTotal =
-          amount;
-
-        largestRecipient =
-          recipient;
-      }
-    }
-
-    const concentration =
-      totalOutgoing > 0
-        ? largestTotal /
-          totalOutgoing
-        : 0;
-
-    if (
-      totalOutgoing > 0 &&
-      concentration >= 0.7
-    ) {
-      results.push({
-        type:
-          "Fund Flow Concentration",
-
-        severity: "MEDIUM",
-
-        description:
-          `${(
-            concentration * 100
-          ).toFixed(
-            1
-          )}% of recent outgoing ETH was sent to a single recipient (${shorten(
-            largestRecipient
-          )}).`,
-
-        score: 10,
-      });
-    }
-
-    // 6. 短时间大量收款方
-
-    let maxRecipients = 0;
-    let recipientEvidence = "";
-
-    for (
-      let i = 0;
-      i < outgoing.length;
-      i++
-    ) {
-      const recipients =
-        new Set<string>();
-
-      for (
-        let j = i;
-        j < outgoing.length;
-        j++
-      ) {
-        if (
-          outgoing[j]
-            .timestamp -
-            outgoing[i]
-              .timestamp <=
-          3600
-        ) {
-          if (
-            outgoing[j]
-              .toLower
-          ) {
-            recipients.add(
-              outgoing[j]
-                .toLower
-            );
-          }
-        } else {
-          break;
-        }
-      }
-
-      if (
-        recipients.size >
-        maxRecipients
-      ) {
-        maxRecipients =
-          recipients.size;
-
-        recipientEvidence =
-          outgoing[i].hash;
-      }
-    }
-
-    if (
-      maxRecipients >= 10
-    ) {
-      const high =
-        maxRecipients >= 20;
-
-      results.push({
-        type:
-          "Mass Recipient Distribution",
-
-        severity: high
-          ? "HIGH"
-          : "MEDIUM",
-
-        description:
-          `Funds were sent to ${maxRecipients} different recipient addresses within a 1-hour window.`,
-
-        score:
-          high ? 16 : 10,
-
-        evidenceHash:
-          recipientEvidence,
-      });
-    }
-
-    // 7. 长期不活跃后突然转出
-
-    for (
-      let i = 1;
-      i < parsed.length;
-      i++
-    ) {
-      const previous =
-        parsed[i - 1];
-
-      const current =
-        parsed[i];
-
-      const days =
-        (current.timestamp -
-          previous.timestamp) /
-        86400;
-
-      if (
-        days >= 30 &&
-        current.isOutgoing &&
-        current.ethValue >=
-          Math.max(
-            avgOutgoing * 3,
-            0.1
-          )
-      ) {
-        results.push({
-          type:
-            "Dormant Wallet Reactivation",
-
-          severity: "HIGH",
-
-          description:
-            `The address was inactive for approximately ${days.toFixed(
-              0
-            )} days before sending ${current.ethValue.toFixed(
-              4
-            )} ETH.`,
-
-          score: 18,
-
-          evidenceHash:
-            current.hash,
-        });
-
-        break;
-      }
-    }
-
-    // 8. 收款后快速转出
 
     for (
       const received of incoming
     ) {
-      let outgoingSoon = 0;
-      let evidence = "";
+      let sentSoon = 0;
+      let evidenceHash = "";
 
       for (
         const sent of outgoing
@@ -831,11 +1019,11 @@ export default function Home() {
           delay >= 0 &&
           delay <= 1800
         ) {
-          outgoingSoon +=
+          sentSoon +=
             sent.ethValue;
 
-          if (!evidence) {
-            evidence =
+          if (!evidenceHash) {
+            evidenceHash =
               sent.hash;
           }
         }
@@ -844,131 +1032,29 @@ export default function Home() {
       if (
         received.ethValue >=
           0.1 &&
-        outgoingSoon >=
+        sentSoon >=
           received.ethValue *
             0.7
       ) {
         results.push({
           type:
-            "Rapid Fund Outflow",
+            "Rapid Internal Fund Outflow",
 
           severity: "HIGH",
 
           description:
             `After receiving ${received.ethValue.toFixed(
               4
-            )} ETH, approximately ${outgoingSoon.toFixed(
+            )} ETH internally, approximately ${sentSoon.toFixed(
               4
-            )} ETH was sent out within 30 minutes.`,
+            )} ETH was internally transferred out within 30 minutes.`,
 
-          score: 20,
+          score: 18,
 
-          evidenceHash:
-            evidence ||
-            received.hash,
+          evidenceHash,
         });
 
         break;
-      }
-    }
-
-    // 9A. 失败交易比例异常
-
-    const failed =
-      parsed.filter(
-        (tx) =>
-          tx.failed
-      );
-
-    const failureRate =
-      parsed.length > 0
-        ? failed.length /
-          parsed.length
-        : 0;
-
-    if (
-      parsed.length >= 5 &&
-      failureRate >= 0.2
-    ) {
-      const high =
-        failureRate >= 0.4;
-
-      results.push({
-        type:
-          "High Transaction Failure Rate",
-
-        severity: high
-          ? "HIGH"
-          : "MEDIUM",
-
-        description:
-          `${failed.length} of ${parsed.length} recent transactions failed (${(
-            failureRate * 100
-          ).toFixed(
-            1
-          )}% failure rate).`,
-
-        score:
-          high ? 14 : 8,
-
-        evidenceHash:
-          failed[0]?.hash,
-      });
-    }
-
-    // 9B. 手续费异常
-
-    const feeTxs =
-      parsed.filter(
-        (tx) =>
-          tx.feeEth > 0
-      );
-
-    if (
-      feeTxs.length >= 3
-    ) {
-      const avgFee =
-        feeTxs.reduce(
-          (sum, tx) =>
-            sum +
-            tx.feeEth,
-          0
-        ) /
-        feeTxs.length;
-
-      const highest =
-        feeTxs.reduce(
-          (max, tx) =>
-            tx.feeEth >
-            max.feeEth
-              ? tx
-              : max,
-          feeTxs[0]
-        );
-
-      if (
-        avgFee > 0 &&
-        highest.feeEth >=
-          avgFee * 3
-      ) {
-        results.push({
-          type:
-            "Abnormal Transaction Fee",
-
-          severity: "MEDIUM",
-
-          description:
-            `A transaction fee of ${highest.feeEth.toFixed(
-              6
-            )} ETH was significantly higher than the recent average fee of ${avgFee.toFixed(
-              6
-            )} ETH.`,
-
-          score: 8,
-
-          evidenceHash:
-            highest.hash,
-        });
       }
     }
 
@@ -978,21 +1064,56 @@ export default function Home() {
   function calculateRiskScore(
     items: Anomaly[]
   ) {
-    const total =
+    return Math.min(
       items.reduce(
-        (
-          sum,
-          anomaly
-        ) =>
+        (sum, anomaly) =>
           sum +
           anomaly.score,
         0
-      );
-
-    return Math.min(
-      total,
+      ),
       100
     );
+  }
+
+  function formatTokenAmount(
+    value: string,
+    decimals: string
+  ) {
+    try {
+      return Number(
+        ethers.formatUnits(
+          value || "0",
+          Number(
+            decimals || "18"
+          )
+        )
+      ).toFixed(4);
+    } catch {
+      return "0.0000";
+    }
+  }
+
+  function formatEth(
+    value: string
+  ) {
+    try {
+      return Number(
+        ethers.formatEther(
+          value || "0"
+        )
+      ).toFixed(4);
+    } catch {
+      return "0.0000";
+    }
+  }
+
+  function formatTime(
+    timestamp: string
+  ) {
+    return new Date(
+      Number(timestamp) *
+        1000
+    ).toLocaleString();
   }
 
   function shorten(
@@ -1016,35 +1137,10 @@ export default function Home() {
     )}`;
   }
 
-  function formatEth(
-    value: string
-  ) {
-    try {
-      return Number(
-        ethers.formatEther(
-          value
-        )
-      ).toFixed(4);
-    } catch {
-      return "0.0000";
-    }
-  }
-
-  function formatTime(
-    timestamp: string
-  ) {
-    return new Date(
-      Number(timestamp) *
-        1000
-    ).toLocaleString();
-  }
-
   function getRiskLevel(
     score: number | null
   ) {
-    if (
-      score === null
-    ) {
+    if (score === null) {
       return {
         label: "WAITING",
         className:
@@ -1054,8 +1150,7 @@ export default function Home() {
 
     if (score >= 80) {
       return {
-        label:
-          "CRITICAL",
+        label: "CRITICAL",
         className:
           "text-red-500",
       };
@@ -1071,8 +1166,7 @@ export default function Home() {
 
     if (score >= 30) {
       return {
-        label:
-          "MEDIUM",
+        label: "MEDIUM",
         className:
           "text-yellow-400",
       };
@@ -1085,40 +1179,44 @@ export default function Home() {
     };
   }
 
-  const risk = useMemo(
-    () =>
-      getRiskLevel(
-        riskScore
-      ),
-    [riskScore]
-  );
+  const risk =
+    useMemo(
+      () =>
+        getRiskLevel(
+          riskScore
+        ),
+      [riskScore]
+    );
 
   return (
     <main className="min-h-screen bg-[#07111f] text-white">
-      <div className="mx-auto max-w-6xl px-6 py-10">
+      <div className="mx-auto max-w-7xl px-6 py-10">
 
         <header className="flex items-center justify-between">
+
           <div>
             <h1 className="text-2xl font-bold">
               ChainScope AI
             </h1>
 
             <p className="text-sm text-slate-400">
-              AI-powered Ethereum anomaly investigation agent
+              Multi-source Ethereum anomaly investigation agent
             </p>
           </div>
 
           <div className="rounded-full border border-slate-700 px-4 py-2 text-sm text-slate-300">
             Ethereum Mainnet
           </div>
+
         </header>
 
-        <section className="mt-24 text-center">
-          <p className="mb-4 text-sm font-medium uppercase tracking-[0.3em] text-cyan-400">
-            On-chain Intelligence
+        <section className="mt-20 text-center">
+
+          <p className="text-sm uppercase tracking-[0.3em] text-cyan-400">
+            Multi-source On-chain Intelligence
           </p>
 
-          <h2 className="text-5xl font-bold">
+          <h2 className="mt-4 text-5xl font-bold">
             Investigate Ethereum activity
 
             <span className="block text-cyan-400">
@@ -1126,8 +1224,8 @@ export default function Home() {
             </span>
           </h2>
 
-          <p className="mx-auto mt-6 max-w-2xl text-lg text-slate-400">
-            Analyze wallet behavior, detect abnormal fund movements and generate an evidence-based investigation report.
+          <p className="mx-auto mt-6 max-w-3xl text-lg text-slate-400">
+            Analyze ETH transactions, ERC-20 transfers and internal contract fund movements in one investigation.
           </p>
 
           <div className="mx-auto mt-10 flex max-w-3xl gap-3 rounded-2xl border border-slate-700 bg-slate-900/70 p-3">
@@ -1144,26 +1242,24 @@ export default function Home() {
             />
 
             <button
-              onClick={
-                startInvestigation
-              }
-              disabled={
-                loading
-              }
+              onClick={startInvestigation}
+              disabled={loading}
               className="rounded-xl bg-cyan-400 px-7 py-4 font-semibold text-slate-950 disabled:opacity-50"
             >
               {loading
                 ? "Investigating..."
                 : "Start Investigation"}
             </button>
+
           </div>
 
           <p className="mt-4 text-sm text-slate-400">
             {status}
           </p>
+
         </section>
 
-        <section className="mt-20 grid gap-5 md:grid-cols-4">
+        <section className="mt-16 grid gap-5 md:grid-cols-6">
 
           <MetricCard
             title="ETH Balance"
@@ -1172,7 +1268,7 @@ export default function Home() {
           />
 
           <MetricCard
-            title="Transactions"
+            title="ETH Tx"
             value={
               transactions.length
                 ? String(
@@ -1180,19 +1276,45 @@ export default function Home() {
                   )
                 : "--"
             }
-            subtitle="Transactions analyzed"
+            subtitle="Normal tx"
+          />
+
+          <MetricCard
+            title="ERC-20"
+            value={
+              tokenTransfers.length
+                ? String(
+                    tokenTransfers.length
+                  )
+                : "--"
+            }
+            subtitle="Token transfers"
+          />
+
+          <MetricCard
+            title="Internal"
+            value={
+              internalTransactions.length
+                ? String(
+                    internalTransactions.length
+                  )
+                : "--"
+            }
+            subtitle="Internal tx"
           />
 
           <MetricCard
             title="Anomalies"
             value={
-              transactions.length
+              transactions.length ||
+              tokenTransfers.length ||
+              internalTransactions.length
                 ? String(
                     anomalies.length
                   )
                 : "--"
             }
-            subtitle="Suspicious patterns"
+            subtitle="Signals"
           />
 
           <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-6">
@@ -1201,7 +1323,7 @@ export default function Home() {
               Risk Score
             </div>
 
-            <div className="mt-5 flex items-end gap-3">
+            <div className="mt-5">
 
               <div className="text-4xl font-bold text-cyan-400">
                 {riskScore ??
@@ -1211,41 +1333,36 @@ export default function Home() {
               {riskScore !==
                 null && (
                 <div
-                  className={`pb-1 text-sm font-semibold ${risk.className}`}
+                  className={`mt-1 text-sm font-semibold ${risk.className}`}
                 >
                   {risk.label}
                 </div>
               )}
+
             </div>
 
-            <div className="mt-2 text-sm text-slate-500">
-              Experimental heuristic score
-            </div>
           </div>
+
         </section>
 
         <section className="mt-8 rounded-2xl border border-slate-800 bg-slate-900/60 p-6">
 
-          <div>
-            <h3 className="text-xl font-semibold">
-              人工智能调查报告
-            </h3>
+          <h3 className="text-xl font-semibold">
+            人工智能调查报告
+          </h3>
 
-            <p className="mt-1 text-sm text-slate-500">
-              DeepSeek 基于确定性链上分析结果和真实交易证据生成。
-            </p>
-          </div>
+          <p className="mt-1 text-sm text-slate-500">
+            DeepSeek 基于 ETH、ERC-20、Internal Transactions 与异常检测证据生成。
+          </p>
 
           <div className="mt-6 rounded-xl border border-slate-800 bg-[#0b1627] p-7">
 
             {aiLoading ? (
-              <div className="flex items-center gap-3 text-cyan-400">
-                <div className="h-2 w-2 animate-pulse rounded-full bg-cyan-400" />
-                DeepSeek 正在分析链上证据...
+              <div className="text-cyan-400">
+                DeepSeek 正在进行多来源证据调查...
               </div>
             ) : aiReport ? (
-              <article className="max-w-none text-slate-300">
-
+              <article>
                 <ReactMarkdown
                   remarkPlugins={[
                     remarkGfm,
@@ -1254,7 +1371,7 @@ export default function Home() {
                     h2: ({
                       children,
                     }) => (
-                      <h2 className="mb-4 mt-10 border-b border-slate-800 pb-3 text-2xl font-bold text-white first:mt-0">
+                      <h2 className="mb-4 mt-10 border-b border-slate-800 pb-3 text-2xl font-bold first:mt-0">
                         {children}
                       </h2>
                     ),
@@ -1278,7 +1395,7 @@ export default function Home() {
                     strong: ({
                       children,
                     }) => (
-                      <strong className="font-semibold text-white">
+                      <strong className="text-white">
                         {children}
                       </strong>
                     ),
@@ -1286,7 +1403,7 @@ export default function Home() {
                     ul: ({
                       children,
                     }) => (
-                      <ul className="my-4 list-disc space-y-2 pl-6 text-slate-300">
+                      <ul className="my-4 list-disc space-y-2 pl-6">
                         {children}
                       </ul>
                     ),
@@ -1294,7 +1411,7 @@ export default function Home() {
                     ol: ({
                       children,
                     }) => (
-                      <ol className="my-4 list-decimal space-y-4 pl-6 text-slate-300">
+                      <ol className="my-4 list-decimal space-y-3 pl-6">
                         {children}
                       </ol>
                     ),
@@ -1302,17 +1419,9 @@ export default function Home() {
                     li: ({
                       children,
                     }) => (
-                      <li className="leading-7">
+                      <li className="leading-7 text-slate-300">
                         {children}
                       </li>
-                    ),
-
-                    blockquote: ({
-                      children,
-                    }) => (
-                      <blockquote className="my-6 border-l-4 border-cyan-400 bg-cyan-400/5 px-5 py-3 text-slate-300">
-                        {children}
-                      </blockquote>
                     ),
 
                     code: ({
@@ -1327,24 +1436,16 @@ export default function Home() {
                       children,
                     }) => (
                       <div className="my-6 overflow-x-auto">
-                        <table className="w-full border-collapse overflow-hidden rounded-xl border border-slate-800 text-left text-sm">
+                        <table className="w-full border-collapse text-sm">
                           {children}
                         </table>
                       </div>
                     ),
 
-                    thead: ({
-                      children,
-                    }) => (
-                      <thead className="bg-slate-800/80 text-slate-200">
-                        {children}
-                      </thead>
-                    ),
-
                     th: ({
                       children,
                     }) => (
-                      <th className="border border-slate-700 px-4 py-3 font-semibold">
+                      <th className="border border-slate-700 bg-slate-800 px-4 py-3 text-left">
                         {children}
                       </th>
                     ),
@@ -1360,15 +1461,15 @@ export default function Home() {
                 >
                   {aiReport}
                 </ReactMarkdown>
-
               </article>
             ) : (
               <div className="py-10 text-center text-slate-500">
-                运行调查后，这里将生成 AI 调查报告。
+                Run an investigation to generate the report.
               </div>
             )}
 
           </div>
+
         </section>
 
         <section className="mt-8 rounded-2xl border border-slate-800 bg-slate-900/60 p-6">
@@ -1377,182 +1478,253 @@ export default function Home() {
             Anomaly Detection
           </h3>
 
-          <p className="mt-1 text-sm text-slate-500">
-            Explainable heuristic analysis of recent Ethereum activity.
-          </p>
-
-          <div className="mt-6">
-
-            {transactions.length ===
-            0 ? (
-              <div className="py-10 text-center text-slate-500">
-                No analysis yet.
-              </div>
-            ) : anomalies.length ===
-              0 ? (
-              <div className="rounded-xl border border-emerald-900/40 bg-emerald-500/5 p-5 text-emerald-400">
-                No major anomalies detected.
-              </div>
-            ) : (
-              <div className="space-y-4">
-
-                {anomalies.map(
-                  (
-                    anomaly,
-                    index
-                  ) => (
-                    <div
-                      key={`${anomaly.type}-${index}`}
-                      className="rounded-xl border border-slate-800 bg-[#0b1627] p-5"
-                    >
-
-                      <div className="flex justify-between gap-4">
-
-                        <div className="font-semibold">
-                          {anomaly.type}
-                        </div>
-
-                        <div
-                          className={
-                            anomaly.severity ===
-                            "HIGH"
-                              ? "text-red-400"
-                              : anomaly.severity ===
-                                "MEDIUM"
-                              ? "text-yellow-400"
-                              : "text-emerald-400"
-                          }
-                        >
-                          {anomaly.severity}
-                        </div>
-                      </div>
-
-                      <p className="mt-3 text-slate-400">
-                        {
-                          anomaly.description
-                        }
-                      </p>
-
-                      <div className="mt-3 text-xs text-slate-500">
-                        Risk contribution: +
-                        {
-                          anomaly.score
-                        }
-                      </div>
-
-                      {anomaly.evidenceHash && (
-                        <div className="mt-2 font-mono text-xs text-slate-500">
-                          Evidence:{" "}
-                          {shorten(
-                            anomaly.evidenceHash
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  )
-                )}
-              </div>
-            )}
-          </div>
-        </section>
-
-        <section className="mt-8 rounded-2xl border border-slate-800 bg-slate-900/60 p-6">
-
-          <h3 className="text-xl font-semibold">
-            Recent Transactions
-          </h3>
-
-          <p className="mt-1 text-sm text-slate-500">
-            Recent Ethereum activity used by the investigation engine.
-          </p>
-
           <div className="mt-6 space-y-4">
 
-            {transactions.map(
-              (tx) => {
-                const outgoing =
-                  tx.from?.toLowerCase() ===
-                  address.toLowerCase();
-
-                return (
+            {!anomalies.length ? (
+              <div className="py-8 text-center text-slate-500">
+                No anomaly data loaded yet.
+              </div>
+            ) : (
+              anomalies.map(
+                (
+                  anomaly,
+                  index
+                ) => (
                   <div
-                    key={
-                      tx.hash
-                    }
+                    key={`${anomaly.type}-${index}`}
                     className="rounded-xl border border-slate-800 bg-[#0b1627] p-5"
                   >
 
-                    <div className="flex flex-col justify-between gap-4 md:flex-row">
+                    <div className="flex justify-between">
 
-                      <div className="flex items-center gap-4">
-
-                        <div
-                          className={
-                            outgoing
-                              ? "rounded-lg bg-orange-500/10 px-3 py-2 text-orange-400"
-                              : "rounded-lg bg-emerald-500/10 px-3 py-2 text-emerald-400"
-                          }
-                        >
-                          {outgoing
-                            ? "OUT"
-                            : "IN"}
-                        </div>
-
-                        <div>
-
-                          <div className="font-semibold">
-                            {formatEth(
-                              tx.value
-                            )}{" "}
-                            ETH
-                          </div>
-
-                          <div className="text-sm text-slate-500">
-                            {formatTime(
-                              tx.timeStamp
-                            )}
-                          </div>
-                        </div>
+                      <div className="font-semibold">
+                        {anomaly.type}
                       </div>
 
-                      <div className="text-sm text-slate-400">
-                        Block #
-                        {
-                          tx.blockNumber
+                      <div
+                        className={
+                          anomaly.severity ===
+                          "HIGH"
+                            ? "text-red-400"
+                            : anomaly.severity ===
+                              "MEDIUM"
+                            ? "text-yellow-400"
+                            : "text-emerald-400"
                         }
+                      >
+                        {anomaly.severity}
                       </div>
-                    </div>
-
-                    <div className="mt-5 grid gap-4 md:grid-cols-3">
-
-                      <Info
-                        label="Tx Hash"
-                        value={shorten(
-                          tx.hash
-                        )}
-                      />
-
-                      <Info
-                        label="From"
-                        value={shorten(
-                          tx.from
-                        )}
-                      />
-
-                      <Info
-                        label="To"
-                        value={shorten(
-                          tx.to
-                        )}
-                      />
 
                     </div>
+
+                    <p className="mt-3 leading-7 text-slate-400">
+                      {anomaly.description}
+                    </p>
+
+                    <div className="mt-3 text-xs text-slate-500">
+                      Risk contribution: +{anomaly.score}
+                    </div>
+
+                    {anomaly.evidenceHash && (
+                      <div className="mt-2 font-mono text-xs text-slate-500">
+                        Evidence: {shorten(anomaly.evidenceHash)}
+                      </div>
+                    )}
+
                   </div>
-                );
-              }
+                )
+              )
             )}
+
           </div>
+
         </section>
+
+        <EvidenceSection
+          title="Internal Transactions"
+          subtitle="ETH movements generated inside smart contract execution."
+        >
+          {internalTransactions.length ===
+          0 ? (
+            <EmptyText text="No internal transactions loaded." />
+          ) : (
+            internalTransactions
+              .slice(0, 30)
+              .map((tx, index) => {
+                const outgoing =
+                  tx.from
+                    ?.toLowerCase() ===
+                  address.toLowerCase();
+
+                return (
+                  <EvidenceCard
+                    key={`${tx.hash}-${index}`}
+                    direction={
+                      outgoing
+                        ? "OUT"
+                        : "IN"
+                    }
+                    title={`${formatEth(
+                      tx.value
+                    )} ETH`}
+                    subtitle={`Internal type: ${
+                      tx.type ||
+                      "unknown"
+                    }`}
+                    time={formatTime(
+                      tx.timeStamp
+                    )}
+                    fields={[
+                      [
+                        "Tx Hash",
+                        shorten(
+                          tx.hash
+                        ),
+                      ],
+                      [
+                        "From",
+                        shorten(
+                          tx.from
+                        ),
+                      ],
+                      [
+                        "To",
+                        shorten(
+                          tx.to
+                        ),
+                      ],
+                      [
+                        "Block",
+                        tx.blockNumber,
+                      ],
+                    ]}
+                  />
+                );
+              })
+          )}
+        </EvidenceSection>
+
+        <EvidenceSection
+          title="ERC-20 Token Transfers"
+          subtitle="Recent token movements associated with this address."
+        >
+          {tokenTransfers.length ===
+          0 ? (
+            <EmptyText text="No token transfers loaded." />
+          ) : (
+            tokenTransfers
+              .slice(0, 30)
+              .map((tx, index) => {
+                const outgoing =
+                  tx.from
+                    ?.toLowerCase() ===
+                  address.toLowerCase();
+
+                return (
+                  <EvidenceCard
+                    key={`${tx.hash}-${index}`}
+                    direction={
+                      outgoing
+                        ? "OUT"
+                        : "IN"
+                    }
+                    title={`${formatTokenAmount(
+                      tx.value,
+                      tx.tokenDecimal
+                    )} ${
+                      tx.tokenSymbol ||
+                      "TOKEN"
+                    }`}
+                    subtitle={
+                      tx.tokenName ||
+                      "Unknown Token"
+                    }
+                    time={formatTime(
+                      tx.timeStamp
+                    )}
+                    fields={[
+                      [
+                        "Tx Hash",
+                        shorten(
+                          tx.hash
+                        ),
+                      ],
+                      [
+                        "From",
+                        shorten(
+                          tx.from
+                        ),
+                      ],
+                      [
+                        "To",
+                        shorten(
+                          tx.to
+                        ),
+                      ],
+                    ]}
+                  />
+                );
+              })
+          )}
+        </EvidenceSection>
+
+        <EvidenceSection
+          title="ETH Transactions"
+          subtitle="Recent normal Ethereum transactions."
+        >
+          {transactions.length ===
+          0 ? (
+            <EmptyText text="No ETH transactions loaded." />
+          ) : (
+            transactions
+              .slice(0, 30)
+              .map((tx) => {
+                const outgoing =
+                  tx.from
+                    ?.toLowerCase() ===
+                  address.toLowerCase();
+
+                return (
+                  <EvidenceCard
+                    key={tx.hash}
+                    direction={
+                      outgoing
+                        ? "OUT"
+                        : "IN"
+                    }
+                    title={`${formatEth(
+                      tx.value
+                    )} ETH`}
+                    subtitle={`Block #${tx.blockNumber}`}
+                    time={formatTime(
+                      tx.timeStamp
+                    )}
+                    fields={[
+                      [
+                        "Tx Hash",
+                        shorten(
+                          tx.hash
+                        ),
+                      ],
+                      [
+                        "From",
+                        shorten(
+                          tx.from
+                        ),
+                      ],
+                      [
+                        "To",
+                        shorten(
+                          tx.to
+                        ),
+                      ],
+                    ]}
+                  />
+                );
+              })
+          )}
+        </EvidenceSection>
+
       </div>
     </main>
   );
@@ -1578,7 +1750,7 @@ function MetricCard({
         {value}
       </div>
 
-      <div className="mt-2 text-sm text-slate-500">
+      <div className="mt-2 text-xs text-slate-500">
         {subtitle}
       </div>
 
@@ -1586,24 +1758,125 @@ function MetricCard({
   );
 }
 
-function Info({
-  label,
-  value,
+function EvidenceSection({
+  title,
+  subtitle,
+  children,
 }: {
-  label: string;
-  value: string;
+  title: string;
+  subtitle: string;
+  children:
+    React.ReactNode;
 }) {
   return (
-    <div>
+    <section className="mt-8 rounded-2xl border border-slate-800 bg-slate-900/60 p-6">
 
-      <div className="text-xs uppercase tracking-wider text-slate-600">
-        {label}
+      <h3 className="text-xl font-semibold">
+        {title}
+      </h3>
+
+      <p className="mt-1 text-sm text-slate-500">
+        {subtitle}
+      </p>
+
+      <div className="mt-6 space-y-4">
+        {children}
       </div>
 
-      <div className="mt-1 font-mono text-sm text-slate-300">
-        {value}
+    </section>
+  );
+}
+
+function EvidenceCard({
+  direction,
+  title,
+  subtitle,
+  time,
+  fields,
+}: {
+  direction:
+    | "IN"
+    | "OUT";
+  title: string;
+  subtitle: string;
+  time: string;
+  fields: [
+    string,
+    string
+  ][];
+}) {
+  return (
+    <div className="rounded-xl border border-slate-800 bg-[#0b1627] p-5">
+
+      <div className="flex flex-col justify-between gap-4 md:flex-row">
+
+        <div className="flex items-center gap-4">
+
+          <div
+            className={
+              direction ===
+              "OUT"
+                ? "rounded-lg bg-orange-500/10 px-3 py-2 text-orange-400"
+                : "rounded-lg bg-emerald-500/10 px-3 py-2 text-emerald-400"
+            }
+          >
+            {direction}
+          </div>
+
+          <div>
+
+            <div className="font-semibold">
+              {title}
+            </div>
+
+            <div className="text-sm text-slate-500">
+              {subtitle}
+            </div>
+
+          </div>
+
+        </div>
+
+        <div className="text-sm text-slate-500">
+          {time}
+        </div>
+
       </div>
 
+      <div className="mt-5 grid gap-4 md:grid-cols-3">
+
+        {fields.map(
+          (
+            [label, value]
+          ) => (
+            <div key={label}>
+
+              <div className="text-xs uppercase tracking-wider text-slate-600">
+                {label}
+              </div>
+
+              <div className="mt-1 font-mono text-sm text-slate-300">
+                {value}
+              </div>
+
+            </div>
+          )
+        )}
+
+      </div>
+
+    </div>
+  );
+}
+
+function EmptyText({
+  text,
+}: {
+  text: string;
+}) {
+  return (
+    <div className="py-8 text-center text-slate-500">
+      {text}
     </div>
   );
 }
