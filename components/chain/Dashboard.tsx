@@ -6,6 +6,9 @@ import remarkGfm from "remark-gfm";
 import type {
   Anomaly,
   ChangeAnalysis,
+  ChangeMetric,
+  CauseHypothesis,
+  ImpactItem,
   Counterparty,
   InternalTransaction,
   Language,
@@ -14,7 +17,38 @@ import type {
   TokenTransfer,
   Transaction,
 } from "@/lib/types";
+import { copy } from "@/lib/copy";
 import { formatEth, formatMetricValue, shortenGlobal } from "@/lib/format";
+
+export type DashboardProps = {
+
+  language: Language;
+  t: (typeof copy)[Language];
+  address: string;
+  status: string;
+  loading: boolean;
+  onAddressChange: (value: string) => void;
+  onStart: () => void;
+  onLanguageChange: (lang: Language) => void;
+  hasResults: boolean;
+  riskScore: number | null;
+  riskLabel: string;
+  riskClass: string;
+  totalEvents: number;
+  transactions: Transaction[];
+  tokenTransfers: TokenTransfer[];
+  internalTransactions: InternalTransaction[];
+  changeAnalysis: ChangeAnalysis | null;
+  counterparties: Counterparty[];
+  anomalies: Anomaly[];
+  secondHop: SecondHopResult | null;
+  aiLoading: boolean;
+  aiReport: string;
+  activeTab: Tab;
+  onTabChange: (tab: Tab) => void;
+  flaggedHashes: Set<string>;
+  formatTime: (timestamp: string) => string;
+};
 
 export function Dashboard({
   language,
@@ -43,103 +77,43 @@ export function Dashboard({
   onTabChange,
   flaggedHashes,
   formatTime,
-}: {
-  language: Language;
-  t: any;
-  address: string;
-  status: string;
-  loading: boolean;
-  onAddressChange: (value: string) => void;
-  onStart: () => void;
-  onLanguageChange: (lang: Language) => void;
-  hasResults: boolean;
-  riskScore: number | null;
-  riskLabel: string;
-  riskClass: string;
-  totalEvents: number;
-  transactions: Transaction[];
-  tokenTransfers: TokenTransfer[];
-  internalTransactions: InternalTransaction[];
-  changeAnalysis: ChangeAnalysis | null;
-  counterparties: Counterparty[];
-  anomalies: Anomaly[];
-  secondHop: SecondHopResult | null;
-  aiLoading: boolean;
-  aiReport: string;
-  activeTab: Tab;
-  onTabChange: (tab: Tab) => void;
-  flaggedHashes: Set<string>;
-  formatTime: (timestamp: string) => string;
-}) {
+}: DashboardProps) {
   const importantChanges = changeAnalysis?.metrics.filter((x) => x.important) || [];
 
   return (
-    <main className="min-h-screen bg-[#08111d] text-white">
-      <div className="pointer-events-none fixed inset-0 overflow-hidden">
-        <div className="absolute left-1/2 top-[-250px] h-[550px] w-[800px] -translate-x-1/2 rounded-full bg-cyan-500/[0.06] blur-[130px]" />
-      </div>
-
-      <div className="relative mx-auto max-w-7xl px-5 py-7 md:px-8">
-        <header className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-cyan-400/20 bg-cyan-400/[0.08] font-semibold text-cyan-300">
-              C
-            </div>
-            <div>
-              <div className="font-semibold">ChainScope AI</div>
-              <div className="text-xs text-slate-500">{t.subtitle}</div>
-            </div>
+    <main lang={language === "zh" ? "zh-CN" : "en"} className={`chain-app ${hasResults ? "has-results" : "is-landing"}`}>
+      <div className="app-shell">
+        <header className="app-header">
+          <div className="brand">
+            <div className="brand-mark" aria-hidden="true">C</div>
+            <div><div className="brand-name">ChainScope <span>AI</span></div><div className="brand-subtitle">{t.subtitle}</div></div>
           </div>
-
-          <div className="flex items-center gap-3">
-            <div className="hidden text-xs text-slate-500 md:block">{t.network}</div>
-            <div className="flex rounded-lg border border-white/[0.08] p-1">
-              <button
-                onClick={() => onLanguageChange("zh")}
-                className={`rounded-md px-3 py-1.5 text-xs ${language === "zh" ? "bg-white text-slate-950" : "text-slate-500"}`}
-              >
-                中文
-              </button>
-              <button
-                onClick={() => onLanguageChange("en")}
-                className={`rounded-md px-3 py-1.5 text-xs ${language === "en" ? "bg-white text-slate-950" : "text-slate-500"}`}
-              >
-                EN
-              </button>
+          <div className="header-controls">
+            <span className="network-label">{t.network}</span>
+            <div className="language-switch" aria-label={language === "zh" ? "界面语言" : "Interface language"}>
+              <button aria-pressed={language === "zh"} onClick={() => onLanguageChange("zh")}>中文</button>
+              <button aria-pressed={language === "en"} onClick={() => onLanguageChange("en")}>EN</button>
             </div>
           </div>
         </header>
-
-        <section className="pb-12 pt-20 text-center md:pt-28">
-          <h1 className="mx-auto mt-5 max-w-4xl text-4xl font-semibold tracking-[-0.04em] md:text-6xl">
-            {t.heroTitle}
-          </h1>
-          <p className="mx-auto mt-6 max-w-2xl text-sm leading-7 text-slate-400 md:text-base">
-            {t.heroDescription}
-          </p>
-
-          <div className="mx-auto mt-9 flex max-w-3xl flex-col gap-2 rounded-2xl border border-white/[0.08] bg-white/[0.03] p-2 md:flex-row">
-            <input
-              value={address}
-              onChange={(e) => onAddressChange(e.target.value)}
-              placeholder={t.placeholder}
-              className="flex-1 bg-transparent px-4 py-4 font-mono text-sm outline-none"
-            />
-            <button
-              onClick={onStart}
-              disabled={loading}
-              className="rounded-xl bg-white px-6 py-4 text-sm font-semibold text-slate-950 disabled:opacity-50"
-            >
-              {loading ? t.investigating : t.start}
-            </button>
+        <section className="investigation-entry">
+          <div className="hero-composition">
+            <div className="hero-copy">
+              <h1><span>{t.heroLine1}</span><span>{t.heroLine2}</span></h1>
+              <p className="hero-description">{t.heroDescription}</p>
+            </div>
+            {!hasResults && <div className="gradient-art" aria-hidden="true"><div className="gradient-orbit" /><div className="gradient-core" /></div>}
           </div>
-
-          {status ? <div className="mt-4 text-xs text-slate-500">{status}</div> : null}
+          <form className="address-form" onSubmit={event => { event.preventDefault(); if (!loading) onStart(); }}>
+            <label className="sr-only" htmlFor="investigation-address">{t.placeholder}</label>
+            <input id="investigation-address" value={address} onChange={event => onAddressChange(event.target.value)} placeholder={t.placeholder} spellCheck={false} autoComplete="off" aria-describedby={status ? "investigation-status" : undefined} />
+            <button type="submit" disabled={loading}>{loading ? t.investigating : t.start}<span aria-hidden="true">↗</span></button>
+          </form>
+          {status ? <div id="investigation-status" role="status" className="investigation-status">{loading && <span className="loading-mark" aria-hidden="true" />}{status}</div> : null}
         </section>
-
         {hasResults && riskScore !== null && (
           <>
-            <section className="grid gap-3 md:grid-cols-4">
+            <section className="summary-grid">
               <SummaryCard label={t.rootRisk} value={`${riskScore}`} description={riskLabel} valueClass={riskClass} />
               <SummaryCard
                 label={t.observedEvents}
@@ -151,7 +125,7 @@ export function Dashboard({
             </section>
 
             <section className="mt-7">
-              <div className="inline-flex rounded-xl border border-white/[0.07] bg-white/[0.025] p-1.5">
+              <div className="analysis-tabs" role="tablist" aria-label={language === "zh" ? "调查结果" : "Investigation results"}>
                 <TabButton active={activeTab === "overview"} onClick={() => onTabChange("overview")}>{t.overview}</TabButton>
                 <TabButton active={activeTab === "trace"} onClick={() => onTabChange("trace")}>{t.trace}</TabButton>
                 <TabButton active={activeTab === "report"} onClick={() => onTabChange("report")}>{t.report}</TabButton>
@@ -163,7 +137,7 @@ export function Dashboard({
               <div className="mt-5 space-y-5">
                 <Panel>
                   <SectionHeader number="01" title={t.whatChanged} subtitle={t.whatChangedDesc} />
-                  <p className="mt-5 text-sm leading-7 text-slate-400">
+                  <p className="mt-5 text-sm leading-7 text-neutral-600">
                     {language === "zh" ? changeAnalysis?.summaryZh : changeAnalysis?.summaryEn}
                   </p>
                   <div className="mt-5 grid gap-3 md:grid-cols-2 lg:grid-cols-3">
@@ -207,25 +181,25 @@ export function Dashboard({
                 <Panel>
                   <SectionHeader number="Agent" title={t.traceTitle} subtitle={t.traceDesc} />
                   {!secondHop ? <div className="mt-5"><EmptyState>{t.noSecondHop}</EmptyState></div> : (
-                    <div className="mt-8 flex flex-col items-center">
+                    <div className="trace-layout">
                       <TraceNode badge={t.rootWallet} address={address} />
                       <TraceArrow label={t.directRelation} />
                       <TraceNode badge={t.firstHop} address={secondHop.investigatedAddress} />
                       <TraceArrow label={t.continueInvestigation} />
-                      <div className="w-full">
+                      <div className="trace-branches">
                         <div className="text-center">
-                          <div className="text-xs uppercase tracking-[0.22em] text-violet-300">{t.secondHop}</div>
-                          <p className="mx-auto mt-2 max-w-2xl text-sm text-slate-500">{t.secondHopDesc}</p>
+                          <div className="text-xs uppercase tracking-[0.22em] text-neutral-700">{t.secondHop}</div>
+                          <p className="mx-auto mt-2 max-w-2xl text-sm text-neutral-600">{t.secondHopDesc}</p>
                         </div>
-                        <div className="mt-5 grid gap-3 md:grid-cols-3">
+                        <div className="branch-cards">
                           {secondHop.counterparties.filter((item) => item.address.toLowerCase() !== address.toLowerCase()).slice(0, 6).map((item, index) => (
                             <CounterpartyCard key={item.address} item={item} index={index + 1} language={language} />
                           ))}
                         </div>
                       </div>
-                      <div className="mt-6 w-full rounded-xl border border-amber-500/15 bg-amber-500/[0.03] p-4">
-                        <div className="text-sm font-medium text-amber-300">{t.important}</div>
-                        <p className="mt-2 text-sm leading-6 text-slate-500">{t.importantText}</p>
+                      <div className="trace-note">
+                        <div className="text-sm font-medium text-neutral-800">{t.important}</div>
+                        <p className="mt-2 text-sm leading-6 text-neutral-600">{t.importantText}</p>
                       </div>
                     </div>
                   )}
@@ -237,20 +211,20 @@ export function Dashboard({
               <section className="mt-5">
                 <Panel>
                   <SectionHeader number="AI" title={t.reportTitle} subtitle={t.reportDesc} />
-                  <div className="mt-6 rounded-xl border border-white/[0.06] bg-black/[0.12] p-6">
-                    {aiLoading ? <div className="py-10 text-sm text-cyan-400">{t.generating}</div> : (
+                  <div className="report-body">
+                    {aiLoading ? <div className="py-10 text-sm text-neutral-800">{t.generating}</div> : (
                       <ReactMarkdown
                         remarkPlugins={[remarkGfm]}
                         components={{
-                          h2: ({ children }) => <h2 className="mb-4 mt-9 border-b border-white/[0.06] pb-3 text-xl font-semibold first:mt-0">{children}</h2>,
-                          h3: ({ children }) => <h3 className="mb-3 mt-6 text-base font-semibold text-cyan-300">{children}</h3>,
-                          p: ({ children }) => <p className="my-4 text-sm leading-7 text-slate-300">{children}</p>,
-                          ul: ({ children }) => <ul className="my-4 list-disc space-y-2 pl-5 text-sm text-slate-300">{children}</ul>,
-                          ol: ({ children }) => <ol className="my-4 list-decimal space-y-2 pl-5 text-sm text-slate-300">{children}</ol>,
-                          blockquote: ({ children }) => <blockquote className="my-5 border-l-2 border-cyan-400 px-4 text-sm text-slate-400">{children}</blockquote>,
+                          h2: ({ children }) => <h2 className="mb-4 mt-9 border-b border-neutral-200 pb-3 text-xl font-semibold first:mt-0">{children}</h2>,
+                          h3: ({ children }) => <h3 className="mb-3 mt-6 text-base font-semibold text-neutral-800">{children}</h3>,
+                          p: ({ children }) => <p className="my-4 text-sm leading-7 text-neutral-700">{children}</p>,
+                          ul: ({ children }) => <ul className="my-4 list-disc space-y-2 pl-5 text-sm text-neutral-700">{children}</ul>,
+                          ol: ({ children }) => <ol className="my-4 list-decimal space-y-2 pl-5 text-sm text-neutral-700">{children}</ol>,
+                          blockquote: ({ children }) => <blockquote className="my-5 border-l-2 border-neutral-500 px-4 text-sm text-neutral-600">{children}</blockquote>,
                           table: ({ children }) => <div className="my-5 overflow-x-auto"><table className="w-full text-sm">{children}</table></div>,
-                          th: ({ children }) => <th className="border border-white/[0.08] px-3 py-2 text-left">{children}</th>,
-                          td: ({ children }) => <td className="border border-white/[0.06] px-3 py-2 text-slate-400">{children}</td>,
+                          th: ({ children }) => <th className="border border-neutral-200 px-3 py-2 text-left">{children}</th>,
+                          td: ({ children }) => <td className="border border-neutral-200 px-3 py-2 text-neutral-600">{children}</td>,
                         }}
                       >{aiReport}</ReactMarkdown>
                     )}
@@ -286,28 +260,35 @@ export function Dashboard({
 }
 
 function Panel({ children }: { children: ReactNode }) {
-  return <div className="rounded-2xl border border-white/[0.065] bg-white/[0.025] p-5 md:p-6">{children}</div>;
+  return <div className="content-panel">{children}</div>;
 }
 function SectionHeader({ number, title, subtitle }: { number: string; title: string; subtitle: string }) {
-  return <div className="flex gap-4"><div className="pt-0.5 text-xs font-medium text-cyan-400">{number}</div><div><h3 className="text-lg font-medium">{title}</h3><p className="mt-1 text-sm leading-6 text-slate-500">{subtitle}</p></div></div>;
+  return <div className="flex gap-4"><div className="pt-0.5 text-xs font-medium text-neutral-800">{number}</div><div><h3 className="text-lg font-medium">{title}</h3><p className="mt-1 text-sm leading-6 text-neutral-600">{subtitle}</p></div></div>;
 }
 function SummaryCard({ label, value, description, valueClass = "" }: { label: string; value: string; description: string; valueClass?: string }) {
-  return <div className="rounded-2xl border border-white/[0.06] bg-white/[0.025] p-5"><div className="text-[11px] uppercase tracking-[0.17em] text-slate-500">{label}</div><div className={`mt-4 text-3xl font-semibold ${valueClass}`}>{value}</div><div className="mt-2 text-xs leading-5 text-slate-500">{description}</div></div>;
+  return <div className="summary-card"><div className="text-xs text-neutral-600">{label}</div><div className={`summary-value ${valueClass ? "risk-value " + valueClass : ""}`}>{value}</div><div className="mt-2 text-xs leading-5 text-neutral-600">{description}</div></div>;
 }
 function TabButton({ active, onClick, children }: { active: boolean; onClick: () => void; children: ReactNode }) {
-  return <button onClick={onClick} className={`rounded-lg px-4 py-2 text-sm ${active ? "bg-white text-slate-950" : "text-slate-500 hover:text-white"}`}>{children}</button>;
+  return <button onClick={onClick} role="tab" aria-selected={active} tabIndex={active ? 0 : -1}
+    onKeyDown={event => {
+      if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+      const tabs = Array.from(event.currentTarget.parentElement?.querySelectorAll<HTMLButtonElement>('[role="tab"]') || []);
+      const current = tabs.indexOf(event.currentTarget);
+      const next = event.key === "Home" ? 0 : event.key === "End" ? tabs.length - 1 : (current + (event.key === "ArrowRight" ? 1 : -1) + tabs.length) % tabs.length;
+      event.preventDefault(); tabs[next]?.focus(); tabs[next]?.click();
+    }} className={`analysis-tab ${active ? "active" : ""}`}>{children}</button>;
 }
 function EmptyState({ children }: { children: ReactNode }) {
-  return <div className="rounded-xl border border-dashed border-white/[0.08] px-5 py-10 text-center text-sm text-slate-500">{children}</div>;
+  return <div className="rounded-xl border border-dashed border-neutral-200 px-5 py-10 text-center text-sm text-neutral-600">{children}</div>;
 }
-function ChangeCard({ item, language, recentLabel, baselineLabel }: any) {
+function ChangeCard({ item, language, recentLabel, baselineLabel }: { item: ChangeMetric; language: Language; recentLabel: string; baselineLabel: string }) {
   const up = item.direction === "UP";
   const label = language === "zh" ? item.labelZh : item.labelEn;
   const unit = language === "zh" ? item.unitZh : item.unitEn;
   const explanation = language === "zh" ? item.explanationZh : item.explanationEn;
-  return <div className="rounded-xl border border-white/[0.06] bg-black/[0.1] p-4"><div className="flex items-start justify-between"><div className="text-sm font-medium">{label}</div><div className={up ? "text-emerald-400" : "text-orange-400"}>{up ? "↑" : "↓"}</div></div><div className="mt-4 flex items-end gap-3"><div><div className="text-[10px] uppercase text-slate-600">{baselineLabel}</div><div className="mt-1 text-lg text-slate-500">{formatMetricValue(item.baseline)}{unit}</div></div><div className="pb-1 text-slate-700">→</div><div><div className="text-[10px] uppercase text-slate-600">{recentLabel}</div><div className="mt-1 text-2xl font-semibold">{formatMetricValue(item.recent)}{unit}</div></div></div><p className="mt-4 text-xs leading-5 text-slate-500">{explanation}</p></div>;
+  return <div className="rounded-xl border border-neutral-200 bg-neutral-50 p-4"><div className="flex items-start justify-between"><div className="text-sm font-medium">{label}</div><div className={up ? "text-neutral-700" : "text-neutral-700"}>{up ? "↑" : "↓"}</div></div><div className="mt-4 flex items-end gap-3"><div><div className="text-xs uppercase text-neutral-500">{baselineLabel}</div><div className="mt-1 text-lg text-neutral-600">{formatMetricValue(item.baseline)}{unit}</div></div><div className="pb-1 text-neutral-400">→</div><div><div className="text-xs uppercase text-neutral-500">{recentLabel}</div><div className="mt-1 text-2xl font-semibold">{formatMetricValue(item.recent)}{unit}</div></div></div><p className="mt-4 text-xs leading-5 text-neutral-600">{explanation}</p></div>;
 }
-function CauseCard({ cause, language, confidenceLabel, levels }: any) {
+function CauseCard({ cause, language, confidenceLabel, levels }: { cause: CauseHypothesis; language: Language; confidenceLabel: string; levels: Record<CauseHypothesis["confidence"], string> }) {
   const title = language === "zh" ? cause.titleZh : cause.titleEn;
   const evidence = language === "zh" ? cause.evidenceZh : cause.evidenceEn;
   const explanation = language === "zh" ? cause.explanationZh : cause.explanationEn;
@@ -334,43 +315,43 @@ function CauseCard({ cause, language, confidenceLabel, levels }: any) {
 
   const verificationClass =
     status === "SUPPORTED"
-      ? "border-emerald-400/20 bg-emerald-400/[0.04]"
+      ? "border-neutral-300 bg-neutral-50"
       : status === "PARTIAL"
-      ? "border-cyan-400/20 bg-cyan-400/[0.04]"
-      : "border-white/[0.06] bg-white/[0.02]";
+      ? "border-neutral-300 bg-neutral-50"
+      : "border-neutral-200 bg-neutral-50";
 
   return (
-    <div className="rounded-xl border border-white/[0.06] bg-black/[0.1] p-5">
+    <div className="rounded-xl border border-neutral-200 bg-neutral-50 p-5">
       <div className="flex items-start justify-between gap-3">
         <div className="font-medium">{title}</div>
 
-        <div className="rounded-md bg-white/[0.05] px-2 py-1 text-[10px] text-slate-400">
+        <div className="rounded-md bg-neutral-100 px-2 py-1 text-xs text-neutral-600">
           {confidenceLabel}: {levels[cause.confidence]}
         </div>
       </div>
 
       <div className="mt-4 space-y-2">
         {evidence.map((item: string, index: number) => (
-          <div key={index} className="flex gap-2 text-xs text-slate-400">
-            <span className="text-emerald-400">✓</span>
+          <div key={index} className="flex gap-2 text-xs text-neutral-600">
+            <span className="text-neutral-500" aria-hidden="true">•</span>
             {item}
           </div>
         ))}
       </div>
 
-      <p className="mt-4 text-xs leading-6 text-slate-500">
+      <p className="mt-4 text-xs leading-6 text-neutral-600">
         {explanation}
       </p>
 
       {cause.verification && (
         <div className={`mt-5 rounded-lg border p-3 ${verificationClass}`}>
-          <div className="text-[11px] font-semibold text-slate-300">
+          <div className="text-xs font-semibold text-neutral-700">
             {verificationLabel}
           </div>
 
           <div className="mt-2 space-y-1.5">
             {verificationEvidence?.map((item: string, index: number) => (
-              <div key={index} className="text-[11px] leading-5 text-slate-500">
+              <div key={index} className="text-xs leading-5 text-neutral-600">
                 • {item}
               </div>
             ))}
@@ -380,44 +361,50 @@ function CauseCard({ cause, language, confidenceLabel, levels }: any) {
     </div>
   );
 }
-function ImpactCard({ impact, language }: any) {
-  return <div className="rounded-xl border border-white/[0.06] bg-black/[0.1] p-5"><div className="text-[10px] uppercase tracking-[0.16em] text-cyan-400">{language === "zh" ? impact.categoryZh : impact.categoryEn}</div><div className="mt-2 font-medium">{language === "zh" ? impact.titleZh : impact.titleEn}</div><p className="mt-3 text-sm leading-6 text-slate-500">{language === "zh" ? impact.descriptionZh : impact.descriptionEn}</p></div>;
+function ImpactCard({ impact, language }: { impact: ImpactItem; language: Language }) {
+  return <div className="rounded-xl border border-neutral-200 bg-neutral-50 p-5"><div className="text-xs uppercase tracking-[0.16em] text-neutral-800">{language === "zh" ? impact.categoryZh : impact.categoryEn}</div><div className="mt-2 font-medium">{language === "zh" ? impact.titleZh : impact.titleEn}</div><p className="mt-3 text-sm leading-6 text-neutral-600">{language === "zh" ? impact.descriptionZh : impact.descriptionEn}</p></div>;
 }
 function EvidenceSummary({ title, value, description }: { title: string; value: string; description: string }) {
-  return <div className="rounded-xl border border-white/[0.06] bg-black/[0.1] p-4"><div className="text-xs text-slate-500">{title}</div><div className="mt-2 text-2xl font-semibold">{value}</div><p className="mt-2 text-xs leading-5 text-slate-600">{description}</p></div>;
+  return <div className="rounded-xl border border-neutral-200 bg-neutral-50 p-4"><div className="text-xs text-neutral-600">{title}</div><div className="mt-2 text-2xl font-semibold">{value}</div><p className="mt-2 text-xs leading-5 text-neutral-500">{description}</p></div>;
 }
 function TraceNode({ badge, address }: { badge: string; address: string }) {
-  return <div className="w-full max-w-xl rounded-xl border border-cyan-400/20 bg-cyan-400/[0.025] p-5 text-center"><div className="text-[10px] uppercase tracking-[0.2em] text-cyan-300">{badge}</div><div className="mt-3 break-all font-mono text-sm text-slate-300">{address}</div></div>;
+  return <div className="trace-node"><div className="text-xs uppercase tracking-[0.2em] text-neutral-800">{badge}</div><div className="mt-3 break-all font-mono text-sm text-neutral-700">{address}</div></div>;
 }
 function TraceArrow({ label }: { label: string }) {
-  return <div className="flex flex-col items-center py-4"><div className="h-6 w-px bg-white/[0.12]"/><div className="rounded-full border border-white/[0.07] px-3 py-1 text-[10px] text-slate-500">{label}</div><div className="h-6 w-px bg-white/[0.12]"/><div className="text-xs text-slate-600">▼</div></div>;
+  return <div className="trace-arrow"><span>{label}</span><div aria-hidden="true">→</div></div>;
 }
 function CounterpartyCard({ item, index, language }: { item: Counterparty; index: number; language: Language }) {
-  return <div className="rounded-xl border border-violet-400/15 bg-violet-400/[0.025] p-4"><div className="text-[10px] text-violet-300">{language === "zh" ? `关联地址 #${index}` : `Connected Address #${index}`}</div><div className="mt-2 truncate font-mono text-sm">{shortenGlobal(item.address)}</div><div className="mt-3 text-xs text-slate-500">{item.interactionCount} {language === "zh" ? "次观测事件" : "observed events"}</div></div>;
+  return <div className="rounded-xl border border-neutral-200 bg-neutral-50 p-4"><div className="text-xs text-neutral-700">{language === "zh" ? `关联地址 #${index}` : `Connected Address #${index}`}</div><div className="mt-2 truncate font-mono text-sm">{shortenGlobal(item.address)}</div><div className="mt-3 text-xs text-neutral-600">{item.interactionCount} {language === "zh" ? "次观测事件" : "observed events"}</div></div>;
 }
-function EvidenceExplorer(props: any) {
+type EvidenceExplorerProps = {
+ language: Language; address: string; title: string; description: string; evidenceReason: string;
+ anomaliesLabel: string; ethLabel: string; tokenLabel: string; internalLabel: string;
+ anomalies: Anomaly[]; transactions: Transaction[]; tokenTransfers: TokenTransfer[]; internalTransactions: InternalTransaction[];
+ flaggedHashes: Set<string>; formatTime: (timestamp: string) => string;
+};
+function EvidenceExplorer(props: EvidenceExplorerProps) {
   const { language, address, title, description, evidenceReason, anomaliesLabel, ethLabel, tokenLabel, internalLabel, anomalies, transactions, tokenTransfers, internalTransactions, flaggedHashes, formatTime } = props;
   const flaggedEthCount = transactions.filter((tx: Transaction) => flaggedHashes.has(tx.hash?.toLowerCase())).length;
   const flaggedTokenCount = tokenTransfers.filter((tx: TokenTransfer) => flaggedHashes.has(tx.hash?.toLowerCase())).length;
   const flaggedInternalCount = internalTransactions.filter((tx: InternalTransaction) => flaggedHashes.has(tx.hash?.toLowerCase())).length;
-  return <section className="mt-5"><Panel><SectionHeader number="Data" title={title} subtitle={description}/>{flaggedHashes.size > 0 && <div className="mt-5 flex items-start gap-3 rounded-xl border border-orange-400/20 bg-orange-400/[0.04] p-4"><div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-orange-400/10 text-sm text-orange-300">!</div><div><div className="text-sm font-medium text-orange-200">{language === "zh" ? `检测到 ${flaggedHashes.size} 个重点 Tx Hash` : `${flaggedHashes.size} flagged transaction hash(es) detected`}</div><p className="mt-1 text-xs leading-5 text-slate-500">{evidenceReason}</p></div></div>}<div className="mt-5 space-y-2"><EvidenceAccordion title={anomaliesLabel} count={anomalies.length} flaggedCount={anomalies.filter((x: Anomaly) => Boolean(x.evidenceHash)).length} language={language}><div className="space-y-2">{anomalies.map((x: Anomaly, i: number) => <AnomalyEvidence key={`${x.type}-${i}`} anomaly={x} language={language}/>)}</div></EvidenceAccordion><EvidenceAccordion title={ethLabel} count={transactions.length} flaggedCount={flaggedEthCount} language={language}><EvidenceRows kind="eth" items={transactions} address={address} flaggedHashes={flaggedHashes} language={language} formatTime={formatTime}/></EvidenceAccordion><EvidenceAccordion title={tokenLabel} count={tokenTransfers.length} flaggedCount={flaggedTokenCount} language={language}><EvidenceRows kind="token" items={tokenTransfers} address={address} flaggedHashes={flaggedHashes} language={language} formatTime={formatTime}/></EvidenceAccordion><EvidenceAccordion title={internalLabel} count={internalTransactions.length} flaggedCount={flaggedInternalCount} language={language}><EvidenceRows kind="internal" items={internalTransactions} address={address} flaggedHashes={flaggedHashes} language={language} formatTime={formatTime}/></EvidenceAccordion></div></Panel></section>;
+  return <section className="mt-5"><Panel><SectionHeader number="Data" title={title} subtitle={description}/>{flaggedHashes.size > 0 && <div className="mt-5 flex items-start gap-3 rounded-xl border border-orange-400/20 bg-orange-400/[0.04] p-4"><div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-orange-400/10 text-sm text-amber-800">!</div><div><div className="text-sm font-medium text-amber-900">{language === "zh" ? `检测到 ${flaggedHashes.size} 个重点 Tx Hash` : `${flaggedHashes.size} flagged transaction hash(es) detected`}</div><p className="mt-1 text-xs leading-5 text-neutral-600">{evidenceReason}</p></div></div>}<div className="mt-5 space-y-2"><EvidenceAccordion title={anomaliesLabel} count={anomalies.length} flaggedCount={anomalies.filter((x: Anomaly) => Boolean(x.evidenceHash)).length} language={language}><div className="space-y-2">{anomalies.map((x: Anomaly, i: number) => <AnomalyEvidence key={`${x.type}-${i}`} anomaly={x} language={language}/>)}</div></EvidenceAccordion><EvidenceAccordion title={ethLabel} count={transactions.length} flaggedCount={flaggedEthCount} language={language}><EvidenceRows kind="eth" items={transactions} address={address} flaggedHashes={flaggedHashes} language={language} formatTime={formatTime}/></EvidenceAccordion><EvidenceAccordion title={tokenLabel} count={tokenTransfers.length} flaggedCount={flaggedTokenCount} language={language}><EvidenceRows kind="token" items={tokenTransfers} address={address} flaggedHashes={flaggedHashes} language={language} formatTime={formatTime}/></EvidenceAccordion><EvidenceAccordion title={internalLabel} count={internalTransactions.length} flaggedCount={flaggedInternalCount} language={language}><EvidenceRows kind="internal" items={internalTransactions} address={address} flaggedHashes={flaggedHashes} language={language} formatTime={formatTime}/></EvidenceAccordion></div></Panel></section>;
 }
-function EvidenceAccordion({ title, count, flaggedCount, language, children }: any) {
-  return <details className="group rounded-xl border border-white/[0.06] bg-black/[0.04]"><summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-5 py-4"><div className="flex items-center gap-3"><span className="text-sm">{title}</span>{flaggedCount > 0 && <span className="rounded-full border border-orange-400/20 bg-orange-400/[0.08] px-2.5 py-1 text-[10px] font-medium text-orange-300">{language === "zh" ? `${flaggedCount} 条重点` : `${flaggedCount} flagged`}</span>}</div><div className="flex items-center gap-3"><span className="text-xs text-slate-500">{count}</span><span className="text-xs text-slate-600 transition group-open:rotate-180">↓</span></div></summary><div className="border-t border-white/[0.05] p-4">{children}</div></details>;
+function EvidenceAccordion({ title, count, flaggedCount, language, children }: { title: string; count: number; flaggedCount: number; language: Language; children: ReactNode }) {
+  return <details className="group rounded-xl border border-neutral-200 bg-white"><summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-5 py-4"><div className="flex items-center gap-3"><span className="text-sm">{title}</span>{flaggedCount > 0 && <span className="rounded-full border border-orange-400/20 bg-orange-400/[0.08] px-2.5 py-1 text-xs font-medium text-amber-800">{language === "zh" ? `${flaggedCount} 条重点` : `${flaggedCount} flagged`}</span>}</div><div className="flex items-center gap-3"><span className="text-xs text-neutral-600">{count}</span><span className="text-xs text-neutral-500 transition group-open:rotate-180">↓</span></div></summary><div className="border-t border-neutral-200 p-4">{children}</div></details>;
 }
 function AnomalyEvidence({ anomaly, language }: { anomaly: Anomaly; language: Language }) {
   const hasEvidence = Boolean(anomaly.evidenceHash);
-  return <div className={`rounded-lg border p-4 ${hasEvidence ? "border-orange-400/20 bg-orange-400/[0.035]" : "border-transparent bg-black/[0.12]"}`}><div className="flex items-start justify-between gap-3"><div><div className="text-sm font-medium">{anomaly.type}</div><p className="mt-2 text-xs leading-5 text-slate-500">{anomaly.description}</p></div>{hasEvidence && <span className="shrink-0 rounded-md bg-orange-400/10 px-2 py-1 text-[10px] font-medium text-orange-300">{language === "zh" ? "有链上证据" : "Evidence Linked"}</span>}</div>{anomaly.evidenceHash && <div className="mt-3 border-t border-orange-400/10 pt-3 font-mono text-[10px] text-orange-300/70">Tx: {shortenGlobal(anomaly.evidenceHash)}</div>}</div>;
+  return <div className={`rounded-lg border p-4 ${hasEvidence ? "border-orange-400/20 bg-orange-400/[0.035]" : "border-transparent bg-neutral-50"}`}><div className="flex items-start justify-between gap-3"><div><div className="text-sm font-medium">{anomaly.type}</div><p className="mt-2 text-xs leading-5 text-neutral-600">{anomaly.description}</p></div>{hasEvidence && <span className="shrink-0 rounded-md bg-orange-400/10 px-2 py-1 text-xs font-medium text-amber-800">{language === "zh" ? "有链上证据" : "Evidence Linked"}</span>}</div>{anomaly.evidenceHash && <div className="mt-3 border-t border-orange-400/10 pt-3 font-mono text-xs text-amber-800">Tx: {shortenGlobal(anomaly.evidenceHash)}</div>}</div>;
 }
-function EvidenceRows({ kind, items, address, flaggedHashes, language, formatTime }: any) {
+function EvidenceRows({ kind, items, address, flaggedHashes, language, formatTime }: { kind: "eth" | "token" | "internal"; items: (Transaction | TokenTransfer | InternalTransaction)[]; address: string; flaggedHashes: Set<string>; language: Language; formatTime: (timestamp: string) => string }) {
   const ordered = [...items].slice(0, 30).sort((a, b) => Number(flaggedHashes.has(b.hash?.toLowerCase())) - Number(flaggedHashes.has(a.hash?.toLowerCase())));
-  return <div className="space-y-2">{ordered.map((tx: any, index: number) => {
+  return <div className="space-y-2">{ordered.map((tx, index: number) => {
     const flagged = flaggedHashes.has(tx.hash?.toLowerCase());
     const direction = tx.from?.toLowerCase() === address.toLowerCase() ? "OUT" : "IN";
-    const title = kind === "token" ? (tx.tokenSymbol || "TOKEN") : `${formatEth(tx.value)} ETH${kind === "internal" ? " · Internal" : ""}`;
+    const title = kind === "token" ? ("tokenSymbol" in tx && tx.tokenSymbol || "TOKEN") : `${formatEth(tx.value)} ETH${kind === "internal" ? " · Internal" : ""}`;
     return <EvidenceRow key={`${tx.hash}-${index}`} direction={direction} title={title} hash={tx.hash} time={formatTime(tx.timeStamp)} flagged={flagged} language={language}/>;
   })}</div>;
 }
-function EvidenceRow({ direction, title, hash, time, flagged, language }: any) {
-  return <div className={`relative overflow-hidden rounded-lg border p-4 transition ${flagged ? "border-orange-400/30 bg-orange-400/[0.055]" : "border-transparent bg-black/[0.12]"}`}>{flagged && <div className="absolute inset-y-0 left-0 w-[3px] bg-orange-400"/>}<div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between"><div className="flex items-center gap-3"><span className={`rounded px-2 py-1 text-[10px] ${direction === "OUT" ? "bg-orange-400/10 text-orange-300" : "bg-emerald-400/10 text-emerald-300"}`}>{direction}</span><div><div className="flex flex-wrap items-center gap-2"><div className="text-sm">{title}</div>{flagged && <span className="rounded-md border border-orange-400/20 bg-orange-400/10 px-2 py-1 text-[9px] font-semibold uppercase tracking-[0.12em] text-orange-300">{language === "zh" ? "重点证据" : "Flagged Evidence"}</span>}</div><div className="mt-1 font-mono text-[10px] text-slate-600">{shortenGlobal(hash)}</div></div></div><div className="text-[10px] text-slate-600">{time}</div></div>{flagged && <div className="mt-3 rounded-md bg-orange-400/[0.04] px-3 py-2 text-[10px] leading-5 text-orange-200/60">{language === "zh" ? "该交易被异常检测规则直接引用，建议优先核查。" : "This transaction is directly referenced by an anomaly rule and should be reviewed first."}</div>}</div>;
+function EvidenceRow({ direction, title, hash, time, flagged, language }: { direction: "IN" | "OUT"; title: string; hash: string; time: string; flagged: boolean; language: Language }) {
+  return <div className={`evidence-row relative overflow-hidden rounded-lg border p-4 transition ${flagged ? "border-orange-400/30 bg-orange-400/[0.055]" : "border-transparent bg-neutral-50"}`}>{flagged && <div className="absolute inset-y-0 left-0 w-[3px] bg-orange-400"/>}<div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between"><div className="flex items-center gap-3"><span className={`rounded px-2 py-1 text-xs ${direction === "OUT" ? "bg-neutral-100 text-neutral-700" : "bg-neutral-100 text-neutral-700"}`}>{direction}</span><div><div className="flex flex-wrap items-center gap-2"><div className="text-sm">{title}</div>{flagged && <span className="rounded-md border border-orange-400/20 bg-orange-400/10 px-2 py-1 text-xs font-semibold uppercase tracking-[0.12em] text-amber-800">{language === "zh" ? "重点证据" : "Flagged Evidence"}</span>}</div><div className="mt-1 font-mono text-xs text-neutral-500">{shortenGlobal(hash)}</div></div></div><div className="text-xs text-neutral-500">{time}</div></div>{flagged && <div className="mt-3 rounded-md bg-orange-400/[0.04] px-3 py-2 text-xs leading-5 text-amber-800">{language === "zh" ? "该交易被异常检测规则直接引用，建议优先核查。" : "This transaction is directly referenced by an anomaly rule and should be reviewed first."}</div>}</div>;
 }
