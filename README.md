@@ -1,128 +1,112 @@
 # ChainScope AI
 
-## 项目简介
+> **溯迹·观微** —— 所有的隐匿，终有迹可循
 
-ChainScope AI 是一个 **Ethereum 链上异动调查 Agent**。
+ChainScope AI 是一个 **Ethereum 链上资金行为调查 Agent**。输入一个地址，它会拉取真实链上数据、识别资金行为变化、分析可能原因、验证关键证据，并生成一份带证据链的 AI 调查报告。
 
-用户输入一个 Ethereum 地址后，系统获取真实链上数据、分析交易行为、识别异常，由 AI Agent 生成带证据的调查报告。
+## ✨ 核心能力
 
-## 比赛方向
+- **三类链上数据源**：ETH 普通交易、ERC-20 代币转账、Internal 内部交易
+- **对手方聚合 + 二跳追踪**：自动构建直接对手方关系网络，并对主要对手方做进一步调查
+- **异常检测 + Risk Score**：覆盖 ETH / Token / Internal / 对手方多类启发式规则，输出 0–100 风险分
+- **行为变化分析**：对比「近期窗口」与「基准窗口」，找出真正发生变化的指标
+- **原因假设 + 确定性验证**：基于证据形成原因假设，并通过地址上下文（合约 bytecode / 源码验证）给出 `SUPPORTED` / `PARTIAL` / `UNRESOLVED` 三级验证状态
+- **AI 调查报告**：DeepSeek 生成中英双语报告，反幻觉约束，只解释程序计算出的证据
+- **限流 + 缓存**：每个 API 路由独立限流与缓存，防止密钥被盗刷
 
-- **GCC 公共物品赛道**：以太坊链上异动调查 Agent
-- **扩展方向**：BOT Chain BUILD BEYOND 2026
-
-## 核心流程
+## 🔍 调查流程
 
 ```
-Ethereum Address
-  → Blockchain Data
-  → Transaction Analysis
-  → Anomaly Detection
-  → Risk Score
-  → AI Investigation
-  → Evidence Report
-  → BOT Chain Proof   (待开发)
+输入地址
+  → 余额查询（链上 RPC）
+  → 三数据源采集（Etherscan V2）
+  → 对手方构建
+  → 异常检测 → Risk Score
+  → 变化分析（基准 vs 近期）
+  → 原因假设 → 地址上下文验证
+  → 二跳追踪
+  → 证据汇总 → AI 调查报告
 ```
 
-## 当前已实现功能
+## 🛠 技术栈
 
-- Next.js 16 App Router 项目（TypeScript + Tailwind CSS v4）
-- 首页 UI：标题 + Ethereum Mainnet 标识 + 地址输入框 + Start Investigation 按钮
-- Ethereum 地址格式校验（`ethers.isAddress`）
-- ETH 余额查询（真实链上数据，`ethereum-rpc.publicnode.com` RPC）
-- 最近交易查询（Etherscan API V2，单次最多 100 笔，走代理）
-- 交易列表 UI：Tx Hash / From / To / Value / Block / Timestamp / IN-OUT 方向
-- **10 条启发式异常检测规则**（详见 [PROJECT_STATUS.md](PROJECT_STATUS.md)）
-- **Risk Score**（0–100，分级 LOW / MEDIUM / HIGH / CRITICAL）
-- **AI 调查报告**（DeepSeek，反幻觉约束 prompt，Markdown 渲染，含执行摘要 / 主要发现 / 关键证据 / 风险解释 / 建议 / 置信度）
+- **框架**：Next.js 16（App Router, Turbopack）+ React 19 + TypeScript（strict）
+- **样式**：Tailwind CSS v4，单色主题，自托管 Manrope + Noto Sans SC 字体
+- **链上数据**：ethers.js v6、Etherscan API V2、Ethereum RPC（publicnode）
+- **AI**：DeepSeek（`deepseek-chat`）
+- **网络**：undici + ProxyAgent（本地代理）
+- **渲染**：react-markdown + remark-gfm
 
-## 当前开发状态
-
-**Done**
-
-- Phase 1 — 网络问题已解决（undici ProxyAgent + 本地代理）
-- Phase 2 — 最近交易查询 + 列表 UI
-- Phase 3 — 异常检测（10 条启发式规则）
-- Phase 4 — Risk Score
-- Phase 5 — AI 调查报告（DeepSeek）
-
-**In Progress**
-
-- （无硬阻塞）
-
-**TODO**
-
-- Phase 6 — BOT Chain 可信存证（合约 + 主网部署）
-- ERC-20 / Internal Transactions 纳入分析
-- 异常阈值调优（当前为 MVP 启发式）
-
-## 技术栈
-
-- Next.js（App Router）
-- React
-- TypeScript
-- Tailwind CSS
-- ethers.js
-- Ethereum RPC（publicnode）
-- Etherscan API V2
-- DeepSeek API（AI 调查报告）
-- undici（带代理的网络请求）
-- react-markdown + remark-gfm（报告渲染）
-- Solidity（后续）
-- BOT Chain（后续）
-
-## 本地运行方式
+## 🚀 快速开始
 
 ```bash
 npm install
+cp .env.example .env.local   # 然后填入你的 API Key
 npm run dev
 ```
 
-访问：<http://localhost:3000>
+打开 <http://localhost:3000>。
 
-## 环境配置
+## 🔑 环境变量
 
-项目根目录需要 `.env.local`：
+在项目根目录创建 `.env.local` 并配置：
+
+| 变量 | 说明 |
+|------|------|
+| `ETHERSCAN_API_KEY` | Etherscan API Key（<https://etherscan.io/apis>） |
+| `DEEPSEEK_API_KEY` | DeepSeek API Key（<https://platform.deepseek.com>） |
+| `HTTP_PROXY` | 本地代理（仅本地开发需要，部署到 Vercel 时不要设置） |
+| `HTTPS_PROXY` | 同上 |
+
+> `.env.local` 已在 `.gitignore` 中，不会上传到 GitHub。模板见 [`.env.example`](.env.example)。
+
+## 📡 API 路由
+
+| 路由 | 方法 | 说明 |
+|------|------|------|
+| `/api/transactions` | GET | ETH 普通交易 |
+| `/api/tokentx` | GET | ERC-20 代币转账 |
+| `/api/internal-transactions` | GET | Internal 内部交易 |
+| `/api/second-hop` | GET | 二跳追踪调查 |
+| `/api/address-context` | POST | 地址上下文验证（合约 / 源码） |
+| `/api/investigate` | POST | AI 调查报告 |
+
+## 📁 项目结构
 
 ```
-ETHERSCAN_API_KEY=...            # Etherscan 交易查询
-DEEPSEEK_API_KEY=...             # AI 调查报告（需自行申请）
-HTTP_PROXY=http://127.0.0.1:7892   # 本地代理（按需改成自己的端口）
-HTTPS_PROXY=http://127.0.0.1:7892  # 本地代理
+app/
+  api/
+    transactions/          # ETH 交易查询
+    tokentx/               # ERC-20 转账查询
+    internal-transactions/ # 内部交易查询
+    second-hop/            # 二跳调查
+    address-context/       # 合约 / 源码验证
+    investigate/           # AI 报告生成
+  layout.tsx               # 根布局 + 自托管字体
+  page.tsx                 # 首页控制器（状态编排 + API 调用）
+  globals.css              # 全局视觉
+components/chain/
+  Dashboard.tsx            # 全部 UI 组件
+lib/
+  analysis.ts              # 异常检测 / 变化分析 / 对手方 / Risk Score
+  cause-verification.ts    # 原因假设确定性验证
+  types.ts                 # 共享类型
+  format.ts                # 格式化工具
+  copy.ts                  # 中英文案
 ```
 
-> - `ETHERSCAN_API_KEY` 已随包提供。
-> - `DEEPSEEK_API_KEY` 是高价值计费密钥，**未随包提供**，需队友自行申请后填入。
-> - 代理地址 `127.0.0.1:7892` 是作者本机端口，队友需改成自己的代理端口（或删除这两行直连）。
+## ⚠️ 安全与免责声明
 
-## 当前已知问题
+- 所有 API Key 只在服务端 route handler 中读取，不会暴露到浏览器
+- 各路由内置限流与缓存，降低密钥被盗刷风险
+- 本项目输出的调查报告仅用于链上调查辅助，**不构成对任何地址所有者身份、意图、责任或合法性的判断**
 
-~~Node.js 访问 Etherscan 超时~~ —— **已解决**。通过 `undici` 的 `ProxyAgent` 走本地代理访问 Etherscan / DeepSeek。
+## 📦 部署
 
-当前主要局限（非阻塞）：
+部署到 Vercel 的完整步骤见 [DEPLOY.md](DEPLOY.md)。
 
-- BOT Chain 存证尚未开发
-- 仅分析 ETH 普通交易，ERC-20 / Internal Transactions 未纳入
-- 异常阈值是 MVP 启发式，未做数据调优
-- Risk Score 为实验性评分，非正式安全评级
+## 🗺 Roadmap
 
-## Roadmap
-
-- **Phase 1** — ✅ 解决 Node.js 请求 Etherscan 超时问题
-- **Phase 2** — ✅ 最近交易查询 + 列表 UI
-- **Phase 3** — ✅ 基础异常检测（大额 / 高频 / 快速转出等 10 条规则）
-- **Phase 4** — ✅ Risk Score
-- **Phase 5** — ✅ 接入 AI Agent（DeepSeek），基于真实分析生成调查报告
-- **Phase 6** — ⬜ BOT Chain 可信存证：写入 Report Hash、Address、Tx Hash、Timestamp
-
-## 团队协作建议
-
-建议分工：
-
-1. **Blockchain Data** — 交易查询、ERC-20 / Internal tx 扩展
-2. **Anomaly Detection** — 规则调优与阈值
-3. **AI Agent** — Prompt 调优、报告质量
-4. **Frontend / UX** — 结果展示与交互
-5. **BOT Chain / Solidity** — 存证合约与部署
-
-更多细节见 [PROJECT_STATUS.md](PROJECT_STATUS.md) 与 [HANDOFF.md](HANDOFF.md)。
+- [ ] BOT Chain 可信存证（调查报告 hash / 地址 / tx hash / 时间戳上链）
+- [ ] 异常阈值数据调优
+- [ ] 报告导出与历史记录

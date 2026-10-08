@@ -67,7 +67,7 @@ gh repo create chainscope-ai --private --source=. --push
 
 | 现象 | 原因 / 处理 |
 |------|-------------|
-| 构建时报 `Failed to fetch Geist from Google Fonts` | 已修复:改用系统字体,无需处理 |
+| 构建时报 `Failed to fetch Geist from Google Fonts` | 已修复:改用自托管字体(Manrope / Noto Sans SC),无需处理 |
 | AI 报告返回 `请求过于频繁`(429) | 限流生效,等 1 分钟;或换 IP |
 | AI 报告生成失败、其余正常 | 检查 Vercel 环境变量 `DEEPSEEK_API_KEY` 是否正确 |
 | 交易查询失败、余额正常 | 检查 `ETHERSCAN_API_KEY`;余额走 publicnode RPC 与 Etherscan 无关 |
